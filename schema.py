@@ -126,8 +126,12 @@ CREATE INDEX IF NOT EXISTS idx_tenders_value    ON tenders(value_amount);
 # overrides (e.g. "45310000" -> Electrical/M&E overrides "45" -> Construction).
 CPV_CATEGORY_MAP = {
     # ------------------ Office Furniture ------------------
-    "39": "Office Furniture",             # 39xxxxxx = furniture/furnishings broad
-    "39100000": "Office Furniture",
+    # NB: CPV division 39 is "Furniture; furnishings; domestic appliances;
+    # cleaning products" — a broad `"39"` prefix would swallow cleaning
+    # products (398) and catering supplies (392) as furniture, which is wrong.
+    # Use precise sub-prefixes below instead.
+    "391": "Office Furniture",            # 391xxxxx = all furniture proper
+    "39100000": "Office Furniture",       # furniture broad heading
     "39110000": "Office Furniture",       # seats/chairs
     "39120000": "Office Furniture",       # tables, cupboards
     "39130000": "Office Furniture",       # office furniture
@@ -135,7 +139,7 @@ CPV_CATEGORY_MAP = {
     "39150000": "Office Furniture",       # miscellaneous furniture
     "39160000": "Office Furniture",       # school furniture
     "39170000": "Office Furniture",       # shop furniture
-    "39180000": "Office Furniture",
+    "39180000": "Office Furniture",       # laboratory furniture (mostly cabinets)
     "39200000": "Office Furniture",       # furnishings
 
     # ------------------ Stationery & Supplies ------------------
@@ -191,6 +195,7 @@ CPV_CATEGORY_MAP = {
     # ------------------ Catering Supplies / Food ------------------
     "03": "Catering Supplies / Food",     # agricultural produce
     "15": "Catering Supplies / Food",     # food, beverages
+    "3922": "Catering Supplies / Food",   # 3922xxxx = kitchen/household/catering supplies
 
     # ------------------ Vehicles & Fleet ------------------
     "34": "Vehicles & Fleet",             # transport equipment
@@ -208,9 +213,17 @@ CPV_CATEGORY_MAP = {
 
     # ------------------ Lab / Scientific Equipment ------------------
     "38": "Lab / Scientific Equipment",   # lab/optical/precision
+    "3918": "Lab / Scientific Equipment", # 3918xxxx = laboratory furniture (fume cupboards etc.)
 
     # ------------------ Cleaning Services ------------------
-    "909": "Cleaning Services",           # 909xxxxx = cleaning/sanitation broad
+    "909": "Cleaning Services",           # 909xxxxx = cleaning/sanitation services
+    "398": "Cleaning Services",           # 398xxxxx = cleaning products/consumables
+    "39713430": "Cleaning Services",      # vacuum cleaners
+    "39713431": "Cleaning Services",      # vacuum cleaner accessories
+    "39714500": "Cleaning Services",      # floor-cleaning machines
+    # NB: 397 broad (domestic appliances — freezers, water heaters, etc.) is
+    # intentionally LEFT UNMAPPED. It doesn't cleanly fit any sweet-spot
+    # category; the specific cleaning appliances above are the exception.
 
     # ------------------ Catering Services ------------------
     "55300000": "Catering Services",      # restaurant/food-serving
@@ -221,6 +234,8 @@ CPV_CATEGORY_MAP = {
     "55521000": "Catering Services",
     "55523000": "Catering Services",
     "55524000": "Catering Services",      # school catering
+    "3931": "Catering Services",          # 3931xxxx = catering equipment
+    "3932": "Catering Services",          # 3932xxxx = restaurant equipment
 
     # ------------------ Facilities Mgmt (bundled) ------------------
     "70": "Facilities Mgmt (bundled)",        # real-estate services broad
@@ -233,6 +248,7 @@ CPV_CATEGORY_MAP = {
     "35120000": "Security Services",      # surveillance systems
     "35121000": "Security Services",
     "35125000": "Security Services",
+    "3232": "Security Services",          # 3232xxxx = CCTV / surveillance apparatus
     "79710000": "Security Services",
     "79711000": "Security Services",      # alarm monitoring
     "79713000": "Security Services",      # guard
@@ -253,6 +269,7 @@ CPV_CATEGORY_MAP = {
     # ------------------ IT Managed Services ------------------
     "72": "IT Managed Services",          # all IT services
     "51600000": "IT Managed Services",    # IT installation
+    "50334": "IT Managed Services",       # 50334xxx = telecommunications / comms system maintenance
 
     # ------------------ Professional / Consultancy ------------------
     "71": "Professional / Consultancy",   # architectural/engineering broad
