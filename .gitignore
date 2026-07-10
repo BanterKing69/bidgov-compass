@@ -27,3 +27,6 @@ data/tenders.xlsx
 
 # Keep the SQLite store — it *is* the collected data
 !data/tenders.db
+
+# Local user DB — regenerate on each host
+data/users.db

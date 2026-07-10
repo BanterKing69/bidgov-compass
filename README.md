@@ -18,6 +18,27 @@ spins up a live URL like `https://bidgov-compass.onrender.com` in ~3 minutes.
 Free tier — no card required. The free web service sleeps after 15 min idle
 and takes ~30 s to wake on the next visit.
 
+## Members portal
+
+Every page and API route is behind email+password login (Flask-Login,
+PBKDF2 password hashing, HttpOnly signed session cookies). Signup is open —
+the first account to register becomes admin.
+
+- **/auth/signup** — create account (min 8-char password)
+- **/auth/login** — sign in (with "keep me signed in" 30-day remember)
+- **/auth/account** — change password, see admin status
+- **/auth/logout** — end session
+
+Users live in `data/users.db` — **separate** from the tenders store so
+redeploying tender data never wipes accounts. In production, set:
+
+```bash
+SECRET_KEY=...                 # signs session cookies (Render generates one)
+SESSION_COOKIE_SECURE=1        # cookies over HTTPS only
+```
+
+Both are set automatically by `render.yaml` on first deploy.
+
 ---
 
 ## 1. What it collects

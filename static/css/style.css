@@ -356,6 +356,107 @@ table.tenders thead th.num .col-sort { padding-left: 6px; }
 .center { text-align: center; }
 .muted  { color: var(--muted); }
 
+/* ---------- Auth pages (login / signup / account) ---------- */
+.auth-shell {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 40px 20px;
+  background: var(--bg);
+}
+.auth-card {
+  width: 100%; max-width: 420px;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-2);
+  padding: 34px 32px 28px;
+}
+.auth-brand {
+  display: flex; align-items: center; gap: 12px;
+  margin-bottom: 18px;
+}
+.auth-brand__logo {
+  width: 42px; height: 42px; border-radius: 8px;
+  background: var(--gov); padding: 4px; object-fit: contain;
+}
+.auth-brand__title {
+  font-family: var(--f-head); font-weight: 700; font-size: 20px;
+  color: var(--gov); letter-spacing: -0.01em;
+}
+.auth-brand__title .accent { color: var(--bid); }
+.auth-brand__sub {
+  font-family: var(--f-body); font-size: 11px; color: var(--muted);
+  letter-spacing: .06em; text-transform: uppercase;
+  margin-top: 2px;
+}
+.auth-h1 {
+  font-family: var(--f-head); font-weight: 600; font-size: 20px;
+  color: var(--gov); margin-bottom: 4px;
+}
+.auth-lede {
+  color: var(--muted); font-size: 13px; margin-bottom: 22px;
+}
+.auth-form label {
+  display: block; font-family: var(--f-head); font-weight: 600; font-size: 11.5px;
+  color: var(--gov); text-transform: uppercase; letter-spacing: .06em;
+  margin: 14px 0 6px;
+}
+.auth-form input[type="email"],
+.auth-form input[type="password"],
+.auth-form input[type="text"] {
+  width: 100%; padding: 10px 12px;
+  border: 1px solid var(--line-strong); border-radius: var(--radius-sm);
+  background: var(--card); color: var(--gov); font-size: 14px;
+  font-family: var(--f-body);
+}
+.auth-form input:focus {
+  outline: none; border-color: var(--bid);
+  box-shadow: 0 0 0 3px rgba(224,60,49,.12);
+}
+.auth-row {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-top: 14px; font-size: 12.5px; color: var(--muted);
+}
+.auth-row label {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-family: var(--f-body); font-weight: 400; text-transform: none;
+  letter-spacing: normal; margin: 0; color: var(--muted); font-size: 12.5px;
+}
+.auth-row input[type="checkbox"] { accent-color: var(--bid); }
+.auth-submit {
+  width: 100%; margin-top: 20px;
+  padding: 11px 14px; font-size: 14px; font-weight: 500;
+  background: var(--bid); color: #fff; border: none;
+  border-radius: var(--radius-sm); cursor: pointer;
+  transition: background .15s;
+}
+.auth-submit:hover { background: var(--bid-hover); }
+.auth-foot {
+  text-align: center; font-size: 13px; color: var(--muted);
+  margin-top: 22px; padding-top: 18px; border-top: 1px solid var(--line);
+}
+.auth-flash {
+  padding: 10px 12px; border-radius: var(--radius-sm);
+  font-size: 13px; margin-bottom: 16px;
+}
+.auth-flash--error   { background: var(--bid-tint); color: var(--bid-hover); border-left: 3px solid var(--bid); }
+.auth-flash--success { background: #E8F5EE; color: var(--success); border-left: 3px solid var(--success); }
+.auth-flash--info    { background: #EEF3F8; color: var(--gov-strong); border-left: 3px solid var(--gov-soft); }
+
+/* ---------- Top-bar user menu ---------- */
+.topbar__user {
+  color: rgba(255,255,255,.85);
+  font-size: 12.5px;
+  display: flex; align-items: center; gap: 8px;
+  padding-left: 4px; margin-left: 4px;
+  border-left: 1px solid rgba(255,255,255,.15);
+  padding-left: 14px;
+}
+.topbar__user .email { max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.topbar__user a { color: rgba(255,255,255,.75); text-decoration: none; }
+.topbar__user a:hover { color: #fff; text-decoration: underline; }
+
 /* ---------- Responsive ---------- */
 @media (max-width: 1100px) {
   .layout { grid-template-columns: 240px 1fr; }

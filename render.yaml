@@ -12,9 +12,19 @@ services:
     # background scrape endpoint which can run longer than gunicorn's default.
     startCommand: gunicorn --workers 2 --threads 2 --timeout 120 --bind 0.0.0.0:$PORT app:app
     healthCheckPath: /health
+    # Custom domain — add portal.govbid.co.uk in the Render dashboard after
+    # first deploy; Render provisions a Let's Encrypt cert automatically.
+    domains:
+      - portal.govbid.co.uk
     envVars:
       - key: PYTHON_VERSION
         value: "3.12"
+      # Signs session cookies — Render generates a strong random value.
+      - key: SECRET_KEY
+        generateValue: true
+      # Enforce Secure-only session cookies (Render is HTTPS-only).
+      - key: SESSION_COOKIE_SECURE
+        value: "1"
       # Uncomment + set in the Render dashboard to enable Claude-powered chat:
       # - key: ANTHROPIC_API_KEY
       #   sync: false

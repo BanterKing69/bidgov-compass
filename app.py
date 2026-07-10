@@ -14,15 +14,18 @@ from pathlib import Path
 from flask import (
     Flask, Response, jsonify, render_template, request, send_file, abort
 )
+from flask_login import login_required, current_user
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.path.insert(0, str(Path(__file__).resolve().parent / "collectors"))
 
 import db  # noqa: E402
 import chat as chat_mod  # noqa: E402
+import auth  # noqa: E402
 
 APP_ROOT = Path(__file__).resolve().parent
 app = Flask(__name__, template_folder="templates", static_folder="static")
+auth.init_app(app)
 
 # --------------------------------------------------------------------------- #
 # Scrape job state (in-memory; one job at a time)
@@ -73,11 +76,32 @@ def _run_scrape(days_back: int, max_pages: int) -> None:
 
 
 # --------------------------------------------------------------------------- #
+# Auth gate: every route except the auth blueprint, static files, and /health
+# requires login. API endpoints return JSON 401; page routes redirect to login.
+# --------------------------------------------------------------------------- #
+_PUBLIC_PATHS = ("/auth/", "/static/", "/health")
+
+
+@app.before_request
+def _require_login():
+    path = request.path or "/"
+    if any(path == p or path.startswith(p) for p in _PUBLIC_PATHS):
+        return None
+    if current_user.is_authenticated:
+        return None
+    # JSON responses for API paths, redirect for page routes
+    if path.startswith("/api/"):
+        return jsonify({"error": "auth_required"}), 401
+    from flask import redirect, url_for
+    return redirect(url_for("auth.login", next=path))
+
+
+# --------------------------------------------------------------------------- #
 # Routes
 # --------------------------------------------------------------------------- #
 @app.route("/")
 def home():
-    return render_template("dashboard.html")
+    return render_template("dashboard.html", user=current_user)
 
 
 # --- filters + table ----------------------------------------------------- #

@@ -37,6 +37,13 @@
     <button id="scrapeBtn"  class="btn btn--primary">Scrape now</button>
     <button id="exportXlsx" class="btn btn--ghost">Export Excel</button>
     <button id="exportCsv"  class="btn btn--ghost">CSV</button>
+    {% if user and user.is_authenticated %}
+    <div class="topbar__user">
+      <span class="email" title="{{ user.email }}">{{ user.name or user.email }}</span>
+      <a href="{{ url_for('auth.account') }}" title="Account">Account</a>
+      <a href="{{ url_for('auth.logout') }}" title="Sign out">Sign out</a>
+    </div>
+    {% endif %}
   </div>
 </header>
 

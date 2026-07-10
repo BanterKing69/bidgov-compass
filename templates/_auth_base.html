@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>{% block title %}BidGov Compass{% endblock %}</title>
+  <link rel="icon" href="{{ url_for('static', filename='img/logo.jpeg') }}" />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Poppins:wght@600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}" />
+</head>
+<body>
+  <main class="auth-shell">
+    <div class="auth-card">
+      <div class="auth-brand">
+        <img class="auth-brand__logo" src="{{ url_for('static', filename='img/logo.jpeg') }}" alt="GovBid logo" />
+        <div>
+          <div class="auth-brand__title"><span class="accent">Bid</span>Gov Compass</div>
+          <div class="auth-brand__sub">Members portal</div>
+        </div>
+      </div>
+
+      {% with messages = get_flashed_messages(with_categories=true) %}
+        {% for category, message in messages %}
+          <div class="auth-flash auth-flash--{{ 'error' if category == 'error' else ('success' if category == 'success' else 'info') }}">
+            {{ message }}
+          </div>
+        {% endfor %}
+      {% endwith %}
+
+      {% block content %}{% endblock %}
+    </div>
+  </main>
+</body>
+</html>

@@ -1,0 +1,29 @@
+{% extends "_auth_base.html" %}
+{% block title %}Create account · BidGov Compass{% endblock %}
+{% block content %}
+  <h1 class="auth-h1">Create an account</h1>
+  <p class="auth-lede">Get instant access to UK &amp; EU tender intelligence — normalised, categorised, always live.</p>
+
+  <form method="POST" class="auth-form" autocomplete="on">
+    <label for="name">Name <span style="color:var(--muted);text-transform:none;font-weight:400">(optional)</span></label>
+    <input id="name" name="name" type="text" value="{{ name or '' }}" autocomplete="name" />
+
+    <label for="email">Work email</label>
+    <input id="email" name="email" type="email" required autofocus
+           value="{{ email or '' }}" autocomplete="email" />
+
+    <label for="password">Password <span style="color:var(--muted);text-transform:none;font-weight:400">(min 8 chars)</span></label>
+    <input id="password" name="password" type="password" required minlength="8"
+           autocomplete="new-password" />
+
+    <label for="confirm">Confirm password</label>
+    <input id="confirm" name="confirm" type="password" required minlength="8"
+           autocomplete="new-password" />
+
+    <button type="submit" class="auth-submit">Create account &amp; sign in</button>
+  </form>
+
+  <div class="auth-foot">
+    Already a member? <a href="{{ url_for('auth.login') }}">Sign in</a>
+  </div>
+{% endblock %}

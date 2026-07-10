@@ -1,0 +1,26 @@
+{% extends "_auth_base.html" %}
+{% block title %}Account · BidGov Compass{% endblock %}
+{% block content %}
+  <h1 class="auth-h1">Your account</h1>
+  <p class="auth-lede">Signed in as <b>{{ user.email }}</b>{% if user.is_admin %} &middot; <span style="color:var(--bid);font-weight:600">Admin</span>{% endif %}</p>
+
+  <form method="POST" class="auth-form" autocomplete="off">
+    <input type="hidden" name="action" value="change_password" />
+
+    <label for="current_password">Current password</label>
+    <input id="current_password" name="current_password" type="password" required
+           autocomplete="current-password" />
+
+    <label for="new_password">New password <span style="color:var(--muted);text-transform:none;font-weight:400">(min 8 chars)</span></label>
+    <input id="new_password" name="new_password" type="password" required minlength="8"
+           autocomplete="new-password" />
+
+    <button type="submit" class="auth-submit">Update password</button>
+  </form>
+
+  <div class="auth-foot">
+    <a href="{{ url_for('home') }}">← Back to dashboard</a>
+    &nbsp;·&nbsp;
+    <a href="{{ url_for('auth.logout') }}">Sign out</a>
+  </div>
+{% endblock %}

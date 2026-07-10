@@ -1,0 +1,28 @@
+{% extends "_auth_base.html" %}
+{% block title %}Sign in · BidGov Compass{% endblock %}
+{% block content %}
+  <h1 class="auth-h1">Sign in</h1>
+  <p class="auth-lede">Access your tender intelligence dashboard.</p>
+
+  <form method="POST" class="auth-form" autocomplete="on">
+    <label for="email">Email</label>
+    <input id="email" name="email" type="email" required autofocus
+           value="{{ email or '' }}" autocomplete="email" />
+
+    <label for="password">Password</label>
+    <input id="password" name="password" type="password" required
+           autocomplete="current-password" />
+
+    <div class="auth-row">
+      <label>
+        <input type="checkbox" name="remember" value="1" /> Keep me signed in
+      </label>
+    </div>
+
+    <button type="submit" class="auth-submit">Sign in</button>
+  </form>
+
+  <div class="auth-foot">
+    New here? <a href="{{ url_for('auth.signup') }}">Create an account</a>
+  </div>
+{% endblock %}
