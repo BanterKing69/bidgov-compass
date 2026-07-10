@@ -56,6 +56,8 @@ CATEGORIES = [
     "Temp Staffing / Recruitment", "Legal Services", "Financial / Audit",
     "Health & Social Care", "Transport / Logistics", "Building Maintenance",
     "Construction / Refurb", "Electrical / M&E", "Highways / Civils",
+    # Added as 31st sweet-spot: distinct energy/fuel/utilities procurement lane
+    "Energy & Utilities",
 ]
 
 
@@ -322,6 +324,12 @@ CATEGORY_SHORTCUTS = {
     "roads": "Highways / Civils",
     "fm": "Facilities Mgmt (bundled)",
     "facilities": "Facilities Mgmt (bundled)",
+    "energy": "Energy & Utilities",
+    "utilities": "Energy & Utilities",
+    "fuel": "Energy & Utilities",
+    "electricity": "Energy & Utilities",
+    "gas": "Energy & Utilities",
+    "solar": "Energy & Utilities",
 }
 
 

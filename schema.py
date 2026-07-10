@@ -390,6 +390,81 @@ CPV_CATEGORY_MAP = {
     "45236000": "Highways / Civils",      # flatwork
     "45240000": "Highways / Civils",      # water projects
     "45250000": "Highways / Civils",      # heavy civil
+
+    # ------------------ Energy & Utilities (31st sweet-spot category) ---
+    # Distinct commercial-procurement lane: fuel supply, electricity/gas
+    # contracts, solar hardware, water/electricity distribution utilities.
+    # Added on top of the Tender_Analysis 30 to catch a real ~5% of
+    # opportunities that were previously (unmapped).
+    "09": "Energy & Utilities",           # 09xxxxxx = fuel / energy / solar
+    "65": "Energy & Utilities",           # 65xxxxxx = public utilities (water/elec/gas distribution)
+    "44300000": "Energy & Utilities",     # cable, wire and related products (utility scale)
+    "31121000": "Energy & Utilities",     # generator sets (backup power)
+    "31150000": "Energy & Utilities",     # ballasts (grid)
+
+    # ------------------ Tactical tightening moves --------------------
+    # These slot ~150 previously-unmapped rows into their correct existing
+    # sweet-spot bucket. Each entry is a precise CPV prefix, not a broad one.
+
+    # 793 broad -> Marketing & Comms (event/PR/design consulting/market research)
+    "793": "Marketing & Comms",           # covers 79310 market research, 79340 advertising,
+                                          # 79341 advertising, 79342 marketing, 79390 misc,
+                                          # 79310000 (market and economic research)
+    "79950000": "Marketing & Comms",      # exhibition/fair/congress organisation
+    "79952000": "Marketing & Comms",      # event services
+    "79953000": "Marketing & Comms",      # festival services
+    "79961000": "Marketing & Comms",      # photographic services
+    "79822000": "Marketing & Comms",      # setting services (typesetting/print prep)
+    "79930000": "Marketing & Comms",      # speciality design services
+    "79933000": "Marketing & Comms",      # design support services
+
+    # 7942/3/5 -> Professional / Consultancy (surveys, statistical, evaluation)
+    "79311": "Professional / Consultancy", # 79311xxx = market/social/opinion research
+    "79315000": "Professional / Consultancy",  # social research services
+    "79419000": "Professional / Consultancy",  # evaluation consultancy services
+    "79422000": "Professional / Consultancy",  # planning services
+    "79412000": "Professional / Consultancy",  # financial management consultancy
+    "79413000": "Professional / Consultancy",  # marketing management consultancy
+    "79415000": "Professional / Consultancy",  # production management consultancy
+    "79417000": "Professional / Consultancy",  # safety consultancy
+    "79418000": "Professional / Consultancy",  # procurement consultancy
+
+    # 397 broad -> Electrical / M&E (domestic appliances: fridges, fans, heaters)
+    "397": "Electrical / M&E",            # 397xxxxx = electrical/domestic appliances
+    # (cleaning-specific 39713430 / 39714500 already override to Cleaning above)
+
+    # 30xxx office / print / stationery machinery
+    "3010": "Stationery & Supplies",      # 3010xxxx = office machinery except computers
+    "3012": "Signage & Print",            # 3012xxxx = photocopiers / duplicators / print equip
+    "3016": "Stationery & Supplies",      # 3016xxxx = postage-franking machines etc
+
+    # 14 = mining / basic materials -> Construction / Refurb
+    "14": "Construction / Refurb",        # 14xxxxxx = aggregates, tarmac, sand, stone, metals
+
+    # 42 machinery — split by sub-family
+    "42400000": "Vehicles & Fleet",       # lifting/handling equipment
+    "424":      "Vehicles & Fleet",       # 424xxxxx = forklifts, cranes, hoists, elevators for goods
+    "42416":    "Building Maintenance",   # 42416xxx = lifts (passenger — building infrastructure)
+    "42500000": "Electrical / M&E",       # cooling/ventilation equipment
+    "42510000": "Electrical / M&E",       # heat exchangers / boilers
+    "42511000": "Electrical / M&E",       # heat pumps / HVAC packages
+    "42520000": "Electrical / M&E",       # ventilation equipment
+    "42900000": "Building Maintenance",   # misc general purpose machinery (pumps, compressors)
+    "42910000": "Building Maintenance",
+    "42920000": "Building Maintenance",
+
+    # 90 top-level heading -> Waste Management (default for the broad heading)
+    # NB: the 909 override for Cleaning already wins over this because longer.
+    "90000000": "Waste Management",       # broad "Sewage/refuse/cleaning/environmental"
+
+    # 983 broad -> Cleaning Services (janitorial + laundry)
+    "98310000": "Cleaning Services",      # washing and dry-cleaning services
+    "98311000": "Cleaning Services",      # laundry-collection
+    "98312000": "Cleaning Services",      # textile-cleaning
+    "98313000": "Cleaning Services",      # domestic-cleaning
+    "98314000": "Cleaning Services",      # dyeing services
+    "98315000": "Cleaning Services",      # pressing services
+    "98341140": "Cleaning Services",      # janitorial services
 }
 
 
