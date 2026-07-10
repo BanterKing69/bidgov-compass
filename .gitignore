@@ -1,0 +1,29 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+env/
+
+# OS / editor
+.DS_Store
+.vscode/
+.idea/
+
+# Local secrets / env
+.env
+.env.*
+!.env.example
+
+# Runtime
+*.log
+nohup.out
+/tmp/
+
+# Derived exports (regenerated on every scrape)
+data/tenders.csv
+data/tenders.xlsx
+
+# Keep the SQLite store — it *is* the collected data
+!data/tenders.db

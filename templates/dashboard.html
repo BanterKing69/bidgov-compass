@@ -1,0 +1,267 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>BidGov Compass — UK Tender Intelligence</title>
+  <link rel="icon" href="{{ url_for('static', filename='img/logo.jpeg') }}" />
+
+  <!-- Google Fonts: Poppins + Inter -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Poppins:wght@600;700&display=swap" rel="stylesheet">
+
+  <!-- Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+
+  <!-- jQuery + PivotTable.js (required by PivotTable.js) -->
+  <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jquery-ui@1.13.2/dist/jquery-ui.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/pivottable@2.23.0/dist/pivot.min.js"></script>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/pivottable@2.23.0/dist/pivot.min.css">
+
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}" />
+</head>
+<body>
+
+<!-- ============================== TOP BAR ============================== -->
+<header class="topbar">
+  <div class="topbar__brand">
+    <img class="topbar__logo" src="{{ url_for('static', filename='img/logo.jpeg') }}" alt="GovBid logo" />
+    <div>
+      <div class="topbar__title"><span class="accent">Bid</span>Gov Compass<span class="topbar__sub">Tender Intelligence</span></div>
+    </div>
+  </div>
+  <div class="topbar__actions">
+    <span id="lastUpdated" class="topbar__meta"></span>
+    <button id="scrapeBtn"  class="btn btn--primary">Scrape now</button>
+    <button id="exportXlsx" class="btn btn--ghost">Export Excel</button>
+    <button id="exportCsv"  class="btn btn--ghost">CSV</button>
+  </div>
+</header>
+
+<!-- ============================== LAYOUT =============================== -->
+<div class="layout">
+
+  <!-- =========================== SIDEBAR ============================= -->
+  <aside class="sidebar">
+    <h3 style="margin-bottom:14px;">Filters</h3>
+
+    <div class="filter-group">
+      <label class="filter-group__label" for="fltQ">Search title / buyer</label>
+      <input id="fltQ" class="field" type="text" placeholder="e.g. cleaning, NHS…" />
+    </div>
+
+    <div class="filter-group">
+      <label class="filter-group__label">Status</label>
+      <select id="fltOpen" class="field">
+        <option value="1">Open / live only</option>
+        <option value="0">All (incl. closed)</option>
+      </select>
+    </div>
+
+    <div class="filter-group">
+      <label class="filter-group__label">Contract value (£)</label>
+      <div class="field--range">
+        <input id="fltMin" class="field" type="number" placeholder="min" min="0" step="1000" />
+        <span class="muted">—</span>
+        <input id="fltMax" class="field" type="number" placeholder="max" min="0" step="1000" />
+      </div>
+      <div class="pivot-hint" style="margin-top:6px">
+        Quick:
+        <a href="#" data-band="sweet">£50k–£300k (sweet-spot)</a> ·
+        <a href="#" data-band="mid">£30k–£135k</a> ·
+        <a href="#" data-band="reset">clear</a>
+      </div>
+    </div>
+
+    <div class="filter-group">
+      <label class="filter-group__label">Deadline range</label>
+      <div class="field--range">
+        <input id="fltAfter"  class="field" type="date" title="on or after" />
+        <span class="muted">—</span>
+        <input id="fltBefore" class="field" type="date" title="on or before" />
+      </div>
+    </div>
+
+    <div class="filter-group">
+      <label class="filter-group__label">Category</label>
+      <div id="fltCategory" class="checklist"></div>
+    </div>
+
+    <div class="filter-group">
+      <label class="filter-group__label">Source portal</label>
+      <div id="fltSource" class="checklist"></div>
+    </div>
+
+    <div class="sidebar__foot">
+      <button id="applyBtn" class="btn btn--primary">Apply</button>
+      <button id="resetBtn" class="btn btn--secondary">Reset</button>
+    </div>
+  </aside>
+
+  <!-- ============================ MAIN =============================== -->
+  <main class="main">
+
+    <!-- KPI ROW -->
+    <div class="kpis">
+      <div class="kpi"><div class="kpi__label">Notices matching</div><div id="kpiTotal"  class="kpi__value">–</div><div class="kpi__delta muted">applies to all views</div></div>
+      <div class="kpi kpi--accent"><div class="kpi__label">Open / live</div><div id="kpiOpen"   class="kpi__value">–</div><div class="kpi__delta muted">deadline in future</div></div>
+      <div class="kpi"><div class="kpi__label">Total value (£)</div><div id="kpiValue"  class="kpi__value">–</div><div class="kpi__delta muted">excludes unknown value</div></div>
+      <div class="kpi"><div class="kpi__label">Avg value (£)</div><div id="kpiAvg"    class="kpi__value">–</div><div class="kpi__delta muted">across matched notices</div></div>
+    </div>
+
+    <!-- CHARTS -->
+    <section class="panel">
+      <div class="panel__head">
+        <div class="panel__title">Overview</div>
+        <div class="panel__meta">Charts update with the filters →</div>
+      </div>
+      <div class="charts">
+        <div class="chart-wrap"><canvas id="chartCategory"></canvas></div>
+        <div class="chart-wrap"><canvas id="chartSource"></canvas></div>
+        <div class="chart-wrap"><canvas id="chartBands"></canvas></div>
+      </div>
+      <div class="charts" style="margin-top:14px;">
+        <div class="chart-wrap"><canvas id="chartDeadline"></canvas></div>
+        <div class="chart-wrap" style="grid-column: span 2"><canvas id="chartTopCat"></canvas></div>
+      </div>
+    </section>
+
+    <!-- TABS -->
+    <div class="tabs" role="tablist">
+      <button class="tab tab--active" data-tab="table">Table</button>
+      <button class="tab"              data-tab="pivot">Pivot</button>
+      <button class="tab"              data-tab="chat">Ask the data</button>
+    </div>
+
+    <!-- TABLE -->
+    <section id="tab-table" class="tab-panel is-active panel">
+      <div class="panel__head">
+        <div class="panel__title">Matching tenders</div>
+        <div>
+          <select id="sortSel" class="field" style="width:auto;display:inline-block">
+            <option value="deadline">Sort: deadline ↑</option>
+            <option value="value_desc">Sort: value ↓</option>
+            <option value="value_asc">Sort: value ↑</option>
+            <option value="published_desc">Sort: newest first</option>
+          </select>
+        </div>
+      </div>
+      <div class="tbl-wrap">
+        <table class="tenders">
+          <thead>
+            <tr>
+              <th class="col-h" data-col="title">
+                <button class="col-sort" data-col="title">Title <span class="col-arrow"></span></button>
+                <button class="col-filter" data-col="title" data-kind="search" title="Filter title / buyer">⌕</button>
+              </th>
+              <th class="col-h" data-col="buyer">
+                <button class="col-sort" data-col="buyer">Buyer <span class="col-arrow"></span></button>
+                <button class="col-filter" data-col="buyer" data-kind="search" title="Filter title / buyer">⌕</button>
+              </th>
+              <th class="col-h" data-col="category">
+                <button class="col-sort" data-col="category">Category <span class="col-arrow"></span></button>
+                <button class="col-filter" data-col="category" data-kind="checklist" title="Filter categories">▾</button>
+              </th>
+              <th class="col-h num" data-col="value">
+                <button class="col-sort" data-col="value">Value (£) <span class="col-arrow"></span></button>
+                <button class="col-filter" data-col="value" data-kind="range" title="Filter by value">▾</button>
+              </th>
+              <th class="col-h" data-col="deadline">
+                <button class="col-sort" data-col="deadline">Deadline <span class="col-arrow"></span></button>
+                <button class="col-filter" data-col="deadline" data-kind="daterange" title="Filter by deadline">▾</button>
+              </th>
+              <th class="col-h" data-col="source">
+                <button class="col-sort" data-col="source">Source <span class="col-arrow"></span></button>
+                <button class="col-filter" data-col="source" data-kind="checklist" title="Filter sources">▾</button>
+              </th>
+            </tr>
+          </thead>
+          <tbody id="tblBody"><tr><td colspan="6" class="center muted">Loading…</td></tr></tbody>
+        </table>
+
+        <!-- Column filter popover (positioned + populated by JS) -->
+        <div id="colPop" class="col-pop" hidden>
+          <div class="col-pop__title"></div>
+          <div class="col-pop__body"></div>
+          <div class="col-pop__actions">
+            <button type="button" class="btn btn--secondary btn--sm" data-pop="clear">Clear</button>
+            <button type="button" class="btn btn--primary  btn--sm" data-pop="apply">Apply</button>
+          </div>
+        </div>
+      </div>
+      <div class="panel__meta" id="tblFoot" style="margin-top:10px;"></div>
+    </section>
+
+    <!-- PIVOT -->
+    <section id="tab-pivot" class="tab-panel panel">
+      <div class="panel__head">
+        <div class="panel__title">Pivot table</div>
+        <div class="panel__meta">Drag fields between rows / columns / values. Aggregation: pick from the dropdown.</div>
+      </div>
+      <div class="pivot-hint">
+        Starter layout: <b>Category</b> in rows, <b>Source</b> in cols, count of value.
+        Try dragging <b>deadline_month</b> or <b>region</b> to explore.
+      </div>
+      <div id="pivotOut"></div>
+    </section>
+
+    <!-- CHAT -->
+    <section id="tab-chat" class="tab-panel">
+      <div class="chat">
+        <div id="chatLog" class="chat__log">
+          <div class="chat__msg chat__msg--bot">
+            <b>Ask the data.</b> I'll turn your question into SQL, run it against the tenders store, and show the results — with an inline chart if it's an aggregate answer.
+            <div class="chat__hints" style="padding:8px 0 0">
+              <b>Counts &amp; aggregates:</b> <code>how many open?</code> <code>biggest deals</code> <code>smallest</code> <code>average value</code> <code>median value</code> <code>total value</code>
+              <br><b>Deadlines:</b> <code>closing today</code> <code>closing this week</code> <code>closing next month</code>
+              <br><b>Grouped (auto-charts):</b> <code>by category</code> <code>by buyer</code> <code>by source</code> <code>by region</code> <code>by month</code>
+              <br><b>Value bands:</b> <code>sweet-spot</code> <code>under £100k</code> <code>over £500k</code> <code>between £50k and £300k</code>
+              <br><b>Buyer / region:</b> <code>in NHS</code> <code>for London</code>
+              <br><b>Categories (30 supported):</b> <code>PPE</code> <code>M&amp;E</code> <code>cleaning</code> <code>vehicles</code> <code>construction/refurb</code> …
+            </div>
+          </div>
+        </div>
+        <form id="chatForm" class="chat__form" autocomplete="off">
+          <input id="chatInput" type="text" placeholder="e.g. Which cleaning tenders close this month?" />
+          <button class="btn btn--primary" type="submit">Ask</button>
+        </form>
+        <div class="chat__hints">
+          Powered by rule-based NL→SQL (works offline).
+          Set <code>ANTHROPIC_API_KEY</code> to upgrade to Claude for open-ended questions.
+        </div>
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<!-- ============================ SCRAPE MODAL ============================ -->
+<div id="scrapeModal" class="modal-backdrop">
+  <div class="modal">
+    <h2>Run scrape</h2>
+    <p>Pull fresh notices from the government open-data APIs. Runs in the background — you can keep browsing.</p>
+    <div class="row">
+      <label>Days back
+        <input id="scrapeDays" class="field" type="number" min="1" max="365" value="30" />
+      </label>
+      <label>Max pages / source
+        <input id="scrapeMax"  class="field" type="number" min="1" max="200" value="25" />
+      </label>
+    </div>
+    <div id="scrapeStatusLine" class="pivot-hint">
+      <span id="scrapeDot" class="status-dot"></span>
+      <span id="scrapeStatus">Idle.</span>
+    </div>
+    <div id="scrapeLog" class="scrape-log hidden"></div>
+    <div class="modal__actions">
+      <button id="scrapeClose" class="btn btn--secondary">Close</button>
+      <button id="scrapeStart" class="btn btn--primary">Start scrape</button>
+    </div>
+  </div>
+</div>
+
+<script src="{{ url_for('static', filename='js/dashboard.js') }}"></script>
+</body>
+</html>
