@@ -1,0 +1,20 @@
+# Render Blueprint — https://render.com/docs/blueprint-spec
+# Deploys BidGov Compass as a free web service straight from the GitHub repo.
+services:
+  - type: web
+    name: bidgov-compass
+    runtime: python
+    plan: free
+    region: oregon        # closest to most viewers; change if UK-hosted preferred
+    branch: main
+    buildCommand: pip install -r requirements.txt
+    # 2 workers gives concurrent request handling; 120s timeout protects the
+    # background scrape endpoint which can run longer than gunicorn's default.
+    startCommand: gunicorn --workers 2 --threads 2 --timeout 120 --bind 0.0.0.0:$PORT app:app
+    healthCheckPath: /health
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.12"
+      # Uncomment + set in the Render dashboard to enable Claude-powered chat:
+      # - key: ANTHROPIC_API_KEY
+      #   sync: false

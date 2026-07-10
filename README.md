@@ -9,6 +9,15 @@ data.
 Ships with a live SQLite store of **5,287 notices** (~544 currently open) so
 the dashboard has real data on first launch.
 
+## Deploy your own copy
+
+[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/BanterKing69/bidgov-compass)
+
+One click → sign in with GitHub → Render reads [`render.yaml`](render.yaml) and
+spins up a live URL like `https://bidgov-compass.onrender.com` in ~3 minutes.
+Free tier — no card required. The free web service sleeps after 15 min idle
+and takes ~30 s to wake on the next visit.
+
 ---
 
 ## 1. What it collects
