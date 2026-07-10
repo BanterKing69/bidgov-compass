@@ -128,6 +128,20 @@ input, select, button, textarea { font: inherit; color: inherit; }
 .topbar__actions { margin-left: auto; display: flex; gap: 10px; align-items: center; }
 .topbar__meta { color: rgba(255,255,255,.7); font-size: 12px; margin-right: 6px; }
 
+/* Top-bar primary nav (Opportunities ⇄ Won Contracts) */
+.topnav { display: flex; gap: 4px; margin-left: var(--space-md); }
+.topnav__link {
+  padding: 7px 14px;
+  border-radius: var(--radius-pill);
+  color: rgba(255, 255, 255, .78);
+  font-size: 13px; font-weight: 500;
+  text-decoration: none;
+  transition: background var(--dur-fast) var(--ease),
+              color var(--dur-fast) var(--ease);
+}
+.topnav__link:hover { color: #fff; background: rgba(255, 255, 255, .08); text-decoration: none; }
+.topnav__link.is-active { background: rgba(255, 255, 255, .14); color: #fff; }
+
 /* ---------- Buttons ---------- */
 /* Pill shape, subtle hover-lift + brightness. Apple's "cushioned" affordance. */
 .btn {

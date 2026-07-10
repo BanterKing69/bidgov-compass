@@ -121,6 +121,34 @@ def _notice_and_docs_url(release: dict, tender: dict) -> tuple[Optional[str], Op
     return notice_url, docs_url
 
 
+def _award_fields(release: dict) -> dict:
+    """Extract award-stage enrichment fields from an OCDS release.
+
+    OCDS represents an award notice as a release with `tag: [award]` and an
+    `awards[]` array. Each entry has suppliers, value, date, contractPeriod.
+    For multi-supplier awards we surface the first supplier + a count; the
+    full detail lives in `raw_json`.
+    """
+    awards = release.get("awards") or []
+    if not awards:
+        return {}
+    a = awards[0]
+    suppliers = a.get("suppliers") or []
+    first = suppliers[0] if suppliers else {}
+    value = a.get("value") or {}
+    period = a.get("contractPeriod") or {}
+    return {
+        "awarded_supplier_name":  first.get("name"),
+        "awarded_supplier_id":    first.get("id"),
+        "awarded_supplier_count": len(suppliers) or None,
+        "awarded_value_amount":   value.get("amount"),
+        "awarded_value_currency": value.get("currency"),
+        "awarded_date":           iso(a.get("date")),
+        "contract_start_date":    iso(period.get("startDate")),
+        "contract_end_date":      iso(period.get("endDate")),
+    }
+
+
 def ocds_release_to_tender(
     release: dict,
     source: str,
@@ -141,8 +169,16 @@ def ocds_release_to_tender(
     stage = "award" if any(t in ("award", "contract") for t in tags) else \
             ("planning" if "planning" in tags else "tender")
 
+    # For award-stage releases, extract supplier/value/date enrichment.
+    aw = _award_fields(release) if stage == "award" else {}
+
+    # UID: stage-scoped so a tender and its award notice are DIFFERENT rows
+    # (they share ocid). Without this, INSERT OR REPLACE would overwrite the
+    # tender with its own later-published award release.
+    uid_seed = f"{ocid}::{stage}" if stage != "tender" else str(ocid)
+
     return Tender(
-        uid=Tender.make_uid(source, ocid),
+        uid=Tender.make_uid(source, uid_seed),
         source=source,
         source_type="gov-api-ocds",
         source_id=str(ocid),
@@ -161,11 +197,13 @@ def ocds_release_to_tender(
         published_date=iso(published),
         deadline=iso(deadline),
         status=status,
-        is_open=compute_is_open(status, deadline),
+        is_open=compute_is_open(status, deadline) if stage == "tender" else 0,
         notice_url=notice_url or fallback_notice_url,
         documents_url=docs_url,
         source_api_url=source_api_url,
+        ocid=str(ocid) or None,
         raw_json=json.dumps(release, ensure_ascii=False),
+        **aw,
     )
 
 

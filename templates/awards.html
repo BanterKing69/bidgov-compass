@@ -1,0 +1,182 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Won Contracts · BidGov Compass</title>
+  <link rel="icon" href="{{ url_for('static', filename='img/logo.jpeg') }}" />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Poppins:wght@600;700&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}" />
+</head>
+<body>
+
+<!-- TOP BAR -->
+<header class="topbar">
+  <div class="topbar__brand">
+    <img class="topbar__logo" src="{{ url_for('static', filename='img/logo.jpeg') }}" alt="GovBid logo" />
+    <div>
+      <div class="topbar__title"><span class="accent">Bid</span>Gov Compass<span class="topbar__sub">Tender Intelligence</span></div>
+    </div>
+  </div>
+  <nav class="topnav" aria-label="Primary">
+    <a class="topnav__link" href="{{ url_for('home') }}">Opportunities</a>
+    <a class="topnav__link is-active" href="{{ url_for('awards_page') }}">Won Contracts</a>
+  </nav>
+  <div class="topbar__actions">
+    <span id="lastUpdated" class="topbar__meta"></span>
+    <button id="exportXlsx" class="btn btn--ghost">Export Excel</button>
+    <button id="exportCsv"  class="btn btn--ghost">CSV</button>
+    {% if user and user.is_authenticated %}
+    <div class="topbar__user">
+      <span class="email" title="{{ user.email }}">{{ user.name or user.email }}</span>
+      <a href="{{ url_for('auth.account') }}">Account</a>
+      <a href="{{ url_for('auth.logout') }}">Sign out</a>
+    </div>
+    {% endif %}
+  </div>
+</header>
+
+<div class="layout">
+
+  <!-- SIDEBAR filters -->
+  <aside class="sidebar">
+    <h3 style="margin-bottom:14px;">Filters</h3>
+
+    <div class="filter-group">
+      <label class="filter-group__label" for="fltQ">Search title / buyer</label>
+      <input id="fltQ" class="field" type="text" placeholder="e.g. cleaning, NHS…" />
+    </div>
+
+    <div class="filter-group">
+      <label class="filter-group__label" for="fltSupplier">Winning supplier</label>
+      <input id="fltSupplier" class="field" type="text" placeholder="contains…" />
+    </div>
+
+    <div class="filter-group">
+      <label class="filter-group__label">Awarded value (£)</label>
+      <div class="field--range">
+        <input id="fltAwMin" class="field" type="number" placeholder="min" min="0" step="1000" />
+        <span class="muted">—</span>
+        <input id="fltAwMax" class="field" type="number" placeholder="max" min="0" step="1000" />
+      </div>
+      <div class="pivot-hint" style="margin-top:6px">
+        Quick:
+        <a href="#" data-band="sweet">£50k–£300k</a> ·
+        <a href="#" data-band="mid">£30k–£135k</a> ·
+        <a href="#" data-band="reset">clear</a>
+      </div>
+    </div>
+
+    <div class="filter-group">
+      <label class="filter-group__label">Awarded date</label>
+      <div class="field--range">
+        <input id="fltAwFrom" class="field" type="date" title="on or after" />
+        <span class="muted">—</span>
+        <input id="fltAwTo"   class="field" type="date" title="on or before" />
+      </div>
+    </div>
+
+    <div class="filter-group">
+      <label class="filter-group__label">Category</label>
+      <div id="fltCategory" class="checklist"></div>
+    </div>
+
+    <div class="filter-group">
+      <label class="filter-group__label">Source portal</label>
+      <div id="fltSource" class="checklist"></div>
+    </div>
+
+    <div class="sidebar__foot">
+      <button id="applyBtn" class="btn btn--primary">Apply</button>
+      <button id="resetBtn" class="btn btn--secondary">Reset</button>
+    </div>
+  </aside>
+
+  <!-- MAIN -->
+  <main class="main">
+
+    <!-- KPI ROW -->
+    <div class="kpis" role="region" aria-label="Award summary metrics">
+      <div class="kpi">
+        <div class="kpi__label">Contracts awarded</div>
+        <div id="kpiTotal" class="kpi__value">–</div>
+        <div class="kpi__delta muted">match your filters</div>
+      </div>
+      <div class="kpi kpi--accent">
+        <div class="kpi__label">Unique suppliers</div>
+        <div id="kpiSuppliers" class="kpi__value">–</div>
+        <div class="kpi__delta muted">distinct winners in-view</div>
+      </div>
+      <div class="kpi">
+        <div class="kpi__label">Median awarded £</div>
+        <div id="kpiMedian" class="kpi__value">–</div>
+        <div class="kpi__delta muted">robust to outliers</div>
+      </div>
+      <div class="kpi">
+        <div class="kpi__label">Total awarded £</div>
+        <div id="kpiTotalV" class="kpi__value">–</div>
+        <div class="kpi__delta muted">sum across matches</div>
+      </div>
+    </div>
+
+    <!-- CHARTS -->
+    <section class="panel">
+      <div class="panel__head">
+        <div class="panel__title">Awards overview</div>
+        <div class="panel__meta">Charts update with the filters →</div>
+      </div>
+      <div class="charts">
+        <div class="chart-wrap"><canvas id="chartCategory"></canvas></div>
+        <div class="chart-wrap"><canvas id="chartSource"></canvas></div>
+        <div class="chart-wrap"><canvas id="chartTopSuppliers"></canvas></div>
+      </div>
+      <div class="charts" style="margin-top:14px;">
+        <div class="chart-wrap"><canvas id="chartMonth"></canvas></div>
+        <div class="chart-wrap" style="grid-column: span 2"><canvas id="chartRenewals"></canvas></div>
+      </div>
+    </section>
+
+    <!-- TABLE -->
+    <section class="panel">
+      <div class="panel__head">
+        <div class="panel__title">Awarded contracts</div>
+        <div>
+          <select id="sortSel" class="field" style="width:auto;display:inline-block">
+            <option value="awarded_date">Sort: newest awarded</option>
+            <option value="awarded_date_asc">Sort: oldest awarded</option>
+            <option value="awarded_value_desc">Sort: value ↓</option>
+            <option value="awarded_value_asc">Sort: value ↑</option>
+            <option value="contract_end_asc">Sort: contract ending soonest</option>
+            <option value="supplier_asc">Sort: supplier A→Z</option>
+          </select>
+        </div>
+      </div>
+      <div class="tbl-wrap">
+        <table class="tenders">
+          <thead>
+            <tr>
+              <th scope="col">Title</th>
+              <th scope="col">Buyer</th>
+              <th scope="col">Supplier</th>
+              <th scope="col">Category</th>
+              <th scope="col" class="num">Awarded £</th>
+              <th scope="col">Awarded</th>
+              <th scope="col">Contract ends</th>
+              <th scope="col">Source</th>
+            </tr>
+          </thead>
+          <tbody id="tblBody"><tr><td colspan="8" class="center muted">Loading…</td></tr></tbody>
+        </table>
+      </div>
+      <div class="panel__meta" id="tblFoot" style="margin-top:10px;"></div>
+    </section>
+
+  </main>
+</div>
+
+<script src="{{ url_for('static', filename='js/awards.js') }}"></script>
+</body>
+</html>

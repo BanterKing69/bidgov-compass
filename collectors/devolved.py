@@ -37,6 +37,8 @@ class PublicContractsScotland:
     def collect(self, max_pages: int = 1) -> Iterator[Tender]:
         self.pages_read = 1
         self.truncated = False
+        # PCS returns tender + award notices in a mixed rolling window;
+        # normaliser routes each to the correct stage.
         data = self.http.get_json(self.API)
         src = data.get("uri") or self.API
         for rel in data.get("releases") or []:

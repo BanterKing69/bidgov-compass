@@ -62,6 +62,17 @@ class Tender:
     documents_url: Optional[str] = None      # tender pack / documents link
     source_api_url: Optional[str] = None     # exact API/record URL it came from
 
+    # --- award enrichment (only populated when notice_stage='award') ----- #
+    ocid: Optional[str] = None                    # OCDS contracting-process id (links tender <-> award)
+    awarded_supplier_name: Optional[str] = None   # winning supplier (first if multi)
+    awarded_supplier_id: Optional[str] = None     # OCDS supplier id (e.g. GB-CFS-...)
+    awarded_supplier_count: Optional[int] = None  # 1 for single-supplier, N for multi-lot
+    awarded_value_amount: Optional[float] = None  # final award value (often differs from tender value)
+    awarded_value_currency: Optional[str] = None
+    awarded_date: Optional[str] = None            # ISO — when contract was awarded
+    contract_start_date: Optional[str] = None     # ISO
+    contract_end_date: Optional[str] = None       # ISO — powers renewal-window intel later
+
     # --- audit ----------------------------------------------------------- #
     raw_json: Optional[str] = None           # full original record (provenance)
     collected_at: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
@@ -105,6 +116,15 @@ CREATE TABLE IF NOT EXISTS tenders (
     notice_url           TEXT,
     documents_url        TEXT,
     source_api_url       TEXT,
+    ocid                    TEXT,
+    awarded_supplier_name   TEXT,
+    awarded_supplier_id     TEXT,
+    awarded_supplier_count  INTEGER,
+    awarded_value_amount    REAL,
+    awarded_value_currency  TEXT,
+    awarded_date            TEXT,
+    contract_start_date     TEXT,
+    contract_end_date       TEXT,
     raw_json             TEXT,
     collected_at         TEXT
 );
@@ -113,7 +133,30 @@ CREATE INDEX IF NOT EXISTS idx_tenders_category ON tenders(category);
 CREATE INDEX IF NOT EXISTS idx_tenders_open     ON tenders(is_open);
 CREATE INDEX IF NOT EXISTS idx_tenders_deadline ON tenders(deadline);
 CREATE INDEX IF NOT EXISTS idx_tenders_value    ON tenders(value_amount);
+CREATE INDEX IF NOT EXISTS idx_tenders_stage    ON tenders(notice_stage);
+-- Post-v1 indexes (ocid, awarded_supplier_name, awarded_date) are created by
+-- db._ensure_columns() AFTER the columns are added by the migration.
 """
+
+# Indexes for post-v1 columns — created only once the columns exist.
+POST_V1_INDEXES = [
+    "CREATE INDEX IF NOT EXISTS idx_tenders_ocid     ON tenders(ocid)",
+    "CREATE INDEX IF NOT EXISTS idx_tenders_supplier ON tenders(awarded_supplier_name)",
+    "CREATE INDEX IF NOT EXISTS idx_tenders_award_dt ON tenders(awarded_date)",
+]
+
+# Columns added AFTER v1 — used by db.py to migrate old stores in place.
+POST_V1_COLUMNS = [
+    ("ocid",                    "TEXT"),
+    ("awarded_supplier_name",   "TEXT"),
+    ("awarded_supplier_id",     "TEXT"),
+    ("awarded_supplier_count",  "INTEGER"),
+    ("awarded_value_amount",    "REAL"),
+    ("awarded_value_currency",  "TEXT"),
+    ("awarded_date",            "TEXT"),
+    ("contract_start_date",     "TEXT"),
+    ("contract_end_date",       "TEXT"),
+]
 
 
 # --------------------------------------------------------------------------- #

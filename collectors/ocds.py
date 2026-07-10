@@ -170,16 +170,23 @@ def find_a_tender(
     *,
     chunk_days: int = DEFAULT_CHUNK_DAYS,
     page_limit: int = DEFAULT_PAGE_LIMIT,
+    stages: tuple[str, ...] = ("tender", "award"),
 ) -> OcdsCollector:
-    """Find a Tender (UK-wide, >£139k threshold). Uses updatedFrom/To."""
+    """Find a Tender (UK-wide, >£139k threshold). Uses updatedFrom/To.
+
+    Fetches BOTH tender-stage (live opportunities) and award-stage (won
+    contracts) notices by default. Awards get their own rows keyed on
+    `ocid::award` so a tender and its later award never collide.
+    """
     windows = _chunk_windows(days_back, chunk_days)
     chunks = [
         {
-            "stages": "tender",
+            "stages": stage,
             "updatedFrom": _fmt(frm),
             "updatedTo": _fmt(to),
             "limit": page_limit,
         }
+        for stage in stages
         for frm, to in windows
     ]
 
@@ -204,16 +211,19 @@ def contracts_finder(
     *,
     chunk_days: int = DEFAULT_CHUNK_DAYS,
     page_limit: int = DEFAULT_PAGE_LIMIT,
+    stages: tuple[str, ...] = ("tender", "award"),
 ) -> OcdsCollector:
-    """Contracts Finder (England, incl. below-threshold). Uses publishedFrom/To."""
+    """Contracts Finder (England, incl. below-threshold). Uses publishedFrom/To.
+    Fetches both tender and award stages by default (see find_a_tender)."""
     windows = _chunk_windows(days_back, chunk_days)
     chunks = [
         {
-            "stages": "tender",
+            "stages": stage,
             "publishedFrom": _fmt(frm),
             "publishedTo": _fmt(to),
             "size": page_limit,
         }
+        for stage in stages
         for frm, to in windows
     ]
     return OcdsCollector(

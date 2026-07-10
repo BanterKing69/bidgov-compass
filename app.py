@@ -126,12 +126,63 @@ _ALLOWED_SORT = {
     "source_desc":    "source COLLATE NOCASE DESC",
 }
 
+# Awards-only sort keys (over the same tenders table, but different columns)
+_ALLOWED_AWARD_SORT = {
+    "awarded_date":       "(awarded_date IS NULL), awarded_date DESC",   # newest first (default)
+    "awarded_date_asc":   "(awarded_date IS NULL), awarded_date ASC",
+    "awarded_value_desc": "(awarded_value_amount IS NULL), awarded_value_amount DESC",
+    "awarded_value_asc":  "(awarded_value_amount IS NULL), awarded_value_amount ASC",
+    "contract_end_asc":   "(contract_end_date IS NULL), contract_end_date ASC",
+    "contract_end_desc":  "(contract_end_date IS NULL), contract_end_date DESC",
+    "supplier_asc":       "(awarded_supplier_name IS NULL), awarded_supplier_name COLLATE NOCASE ASC",
+    "supplier_desc":      "(awarded_supplier_name IS NULL), awarded_supplier_name COLLATE NOCASE DESC",
+    "title_asc":          "title COLLATE NOCASE ASC",
+    "title_desc":         "title COLLATE NOCASE DESC",
+    "buyer_asc":          "(buyer_name IS NULL), buyer_name COLLATE NOCASE ASC",
+    "buyer_desc":         "(buyer_name IS NULL), buyer_name COLLATE NOCASE DESC",
+    "category_asc":       "(category IS NULL), category COLLATE NOCASE ASC",
+    "category_desc":      "(category IS NULL), category COLLATE NOCASE DESC",
+    "source_asc":         "source COLLATE NOCASE ASC",
+    "source_desc":        "source COLLATE NOCASE DESC",
+}
 
-def _build_where(args) -> tuple[str, list]:
+
+def _build_where(args, *, stage: str = "tender") -> tuple[str, list]:
+    """Build a WHERE clause for /api/tenders or /api/awards.
+
+    stage='tender'  -> notice_stage='tender' (default; the opportunities view)
+    stage='award'   -> notice_stage='award'  (the won-contracts view)
+    stage='any'     -> no stage restriction (used by chat / raw pivot)
+    """
     clauses, params = [], []
 
-    if args.get("open_only", "1") == "1":
+    if stage == "tender":
+        clauses.append("notice_stage = 'tender'")
+    elif stage == "award":
+        clauses.append("notice_stage = 'award'")
+    # stage == "any" -> no stage filter
+
+    if stage == "tender" and args.get("open_only", "1") == "1":
         clauses.append("is_open = 1")
+
+    if stage == "award":
+        # Awards-specific filters
+        sup = (args.get("supplier") or "").strip()
+        if sup:
+            clauses.append("LOWER(awarded_supplier_name) LIKE ?")
+            params.append(f"%{sup.lower()}%")
+        ad_from = args.get("awarded_from")
+        ad_to = args.get("awarded_to")
+        if ad_from:
+            clauses.append("awarded_date >= ?"); params.append(ad_from)
+        if ad_to:
+            clauses.append("awarded_date <= ?"); params.append(ad_to)
+        av_min = args.get("awarded_min", type=float)
+        av_max = args.get("awarded_max", type=float)
+        if av_min is not None:
+            clauses.append("awarded_value_amount >= ?"); params.append(av_min)
+        if av_max is not None:
+            clauses.append("awarded_value_amount <= ?"); params.append(av_max)
 
     cats = args.getlist("category")
     if cats:
@@ -150,12 +201,13 @@ def _build_where(args) -> tuple[str, list]:
     if vmax is not None:
         clauses.append("value_amount <= ?"); params.append(vmax)
 
-    dl_before = args.get("deadline_before")
-    dl_after = args.get("deadline_after")
-    if dl_after:
-        clauses.append("deadline >= ?"); params.append(dl_after)
-    if dl_before:
-        clauses.append("deadline <= ?"); params.append(dl_before)
+    if stage != "award":
+        dl_before = args.get("deadline_before")
+        dl_after = args.get("deadline_after")
+        if dl_after:
+            clauses.append("deadline >= ?"); params.append(dl_after)
+        if dl_before:
+            clauses.append("deadline <= ?"); params.append(dl_before)
 
     q = args.get("q", "").strip()
     if q:
@@ -191,18 +243,171 @@ def api_tenders():
     return jsonify({"total": total, "returned": len(rows), "rows": rows})
 
 
+# --------------------------------------------------------------------------- #
+# Awards ("Won contracts") — parallel routes that scope to notice_stage='award'
+# --------------------------------------------------------------------------- #
+@app.route("/awards")
+def awards_page():
+    return render_template("awards.html", user=current_user)
+
+
+@app.route("/api/awards")
+def api_awards():
+    where, params = _build_where(request.args, stage="award")
+    sort = _ALLOWED_AWARD_SORT.get(
+        request.args.get("sort", "awarded_date"),
+        _ALLOWED_AWARD_SORT["awarded_date"],
+    )
+    limit = min(int(request.args.get("limit", 500)), 5000)
+    cols = ("uid,source,title,category,cpv_code,buyer_name,buyer_region,"
+            "value_amount,awarded_value_amount,awarded_value_currency,"
+            "awarded_supplier_name,awarded_supplier_id,awarded_supplier_count,"
+            "awarded_date,contract_start_date,contract_end_date,"
+            "notice_url,ocid")
+    conn = db.connect()
+    try:
+        cur = conn.execute(
+            f"SELECT {cols} FROM tenders {where} ORDER BY {sort} LIMIT ?",
+            [*params, limit],
+        )
+        col_names = [d[0] for d in cur.description]
+        rows = [dict(zip(col_names, r)) for r in cur.fetchall()]
+        total = conn.execute(f"SELECT COUNT(*) FROM tenders {where}", params).fetchone()[0]
+    finally:
+        conn.close()
+    return jsonify({"total": total, "returned": len(rows), "rows": rows})
+
+
+@app.route("/api/awards/facets")
+def api_awards_facets():
+    conn = db.connect()
+    try:
+        cats = [r[0] for r in conn.execute(
+            "SELECT DISTINCT category FROM tenders "
+            "WHERE notice_stage='award' AND category IS NOT NULL "
+            "ORDER BY category").fetchall()]
+        sources = [r[0] for r in conn.execute(
+            "SELECT DISTINCT source FROM tenders WHERE notice_stage='award' "
+            "ORDER BY source").fetchall()]
+        top_suppliers = conn.execute(
+            "SELECT awarded_supplier_name, COUNT(*) c, "
+            "       ROUND(COALESCE(SUM(awarded_value_amount),0)) v "
+            "FROM tenders WHERE notice_stage='award' "
+            "AND awarded_supplier_name IS NOT NULL "
+            "GROUP BY awarded_supplier_name ORDER BY c DESC LIMIT 100"
+        ).fetchall()
+        val = conn.execute(
+            "SELECT MIN(awarded_value_amount), MAX(awarded_value_amount) "
+            "FROM tenders WHERE notice_stage='award' "
+            "AND awarded_value_amount IS NOT NULL").fetchone()
+        dates = conn.execute(
+            "SELECT MIN(awarded_date), MAX(awarded_date) "
+            "FROM tenders WHERE notice_stage='award'").fetchone()
+    finally:
+        conn.close()
+    return jsonify({
+        "categories": cats,
+        "sources": sources,
+        "top_suppliers": [
+            {"name": s[0], "wins": s[1], "value": s[2]}
+            for s in top_suppliers if s[0]
+        ],
+        "value_min": val[0] or 0,
+        "value_max": val[1] or 0,
+        "date_min": dates[0],
+        "date_max": dates[1],
+    })
+
+
+@app.route("/api/awards/stats")
+def api_awards_stats():
+    where, params = _build_where(request.args, stage="award")
+    conn = db.connect()
+    try:
+        totals = conn.execute(
+            f"SELECT COUNT(*), "
+            f"       COUNT(DISTINCT awarded_supplier_name), "
+            f"       ROUND(COALESCE(SUM(awarded_value_amount),0)) "
+            f"FROM tenders {where}", params).fetchone()
+
+        # Median awarded value — same window-function pattern as tender stats
+        median_row = conn.execute(f"""
+            WITH ranked AS (
+                SELECT awarded_value_amount v, ROW_NUMBER() OVER (ORDER BY awarded_value_amount) rn,
+                       COUNT(*) OVER () c
+                FROM tenders {where} AND awarded_value_amount IS NOT NULL
+                                     AND awarded_value_amount > 0
+            )
+            SELECT ROUND(AVG(v)) FROM ranked WHERE rn IN ((c+1)/2, (c+2)/2)
+        """, params).fetchone()
+        median_value = (median_row and median_row[0]) or 0
+
+        by_supplier = conn.execute(
+            f"SELECT awarded_supplier_name, COUNT(*) c, "
+            f"       ROUND(COALESCE(SUM(awarded_value_amount),0)) v "
+            f"FROM tenders {where} AND awarded_supplier_name IS NOT NULL "
+            f"GROUP BY awarded_supplier_name ORDER BY c DESC LIMIT 15",
+            params).fetchall()
+
+        by_cat = conn.execute(
+            f"SELECT COALESCE(category,'(unmapped)') k, COUNT(*) n, "
+            f"       ROUND(COALESCE(SUM(awarded_value_amount),0)) total_v "
+            f"FROM tenders {where} GROUP BY category ORDER BY n DESC LIMIT 40",
+            params).fetchall()
+
+        by_month = conn.execute(
+            f"SELECT substr(awarded_date,1,7) k, COUNT(*) n, "
+            f"       ROUND(COALESCE(SUM(awarded_value_amount),0)) total_v "
+            f"FROM tenders {where} AND awarded_date IS NOT NULL "
+            f"GROUP BY 1 ORDER BY 1", params).fetchall()
+
+        by_source = conn.execute(
+            f"SELECT source k, COUNT(*) n FROM tenders {where} "
+            f"GROUP BY source ORDER BY n DESC", params).fetchall()
+
+        # Upcoming renewal windows (contracts expiring in the next 12 months)
+        renewals = conn.execute(f"""
+            SELECT substr(contract_end_date,1,7) k, COUNT(*) n
+            FROM tenders {where} AND contract_end_date IS NOT NULL
+            AND contract_end_date >= date('now')
+            AND contract_end_date <  date('now','+365 days')
+            GROUP BY 1 ORDER BY 1
+        """, params).fetchall()
+    finally:
+        conn.close()
+
+    def d2(rows, keys=("k", "n")):
+        return [dict(zip(keys, r)) for r in rows]
+
+    return jsonify({
+        "totals": {
+            "awards":          totals[0],
+            "unique_suppliers": totals[1] or 0,
+            "total_value":     totals[2] or 0,
+            "median_value":    median_value,
+        },
+        "by_supplier":   [{"k": r[0], "n": r[1], "total_v": r[2]} for r in by_supplier],
+        "by_category":   [{"k": r[0], "n": r[1], "total_v": r[2]} for r in by_cat],
+        "by_month":      [{"k": r[0], "n": r[1], "total_v": r[2]} for r in by_month],
+        "by_source":     d2(by_source),
+        "renewals":      d2(renewals),
+    })
+
+
 @app.route("/api/facets")
 def api_facets():
     conn = db.connect()
     try:
         cats = [r[0] for r in conn.execute(
-            "SELECT DISTINCT category FROM tenders WHERE category IS NOT NULL "
+            "SELECT DISTINCT category FROM tenders "
+            "WHERE notice_stage='tender' AND category IS NOT NULL "
             "ORDER BY category").fetchall()]
         sources = [r[0] for r in conn.execute(
-            "SELECT DISTINCT source FROM tenders ORDER BY source").fetchall()]
+            "SELECT DISTINCT source FROM tenders WHERE notice_stage='tender' "
+            "ORDER BY source").fetchall()]
         mx = conn.execute(
             "SELECT MIN(value_amount), MAX(value_amount) FROM tenders "
-            "WHERE value_amount IS NOT NULL").fetchone()
+            "WHERE notice_stage='tender' AND value_amount IS NOT NULL").fetchone()
     finally:
         conn.close()
     return jsonify({
@@ -389,10 +594,19 @@ def api_scrape_status():
 @app.route("/api/export")
 def api_export():
     fmt = request.args.get("format", "xlsx")
-    where, params = _build_where(request.args)
-    cols = ("source,title,category,cpv_code,cpv_description,buyer_name,"
-            "buyer_region,country,value_amount,value_currency,"
-            "published_date,deadline,status,is_open,notice_url,source_api_url")
+    stage = request.args.get("stage", "tender")
+    where, params = _build_where(request.args, stage=stage)
+    if stage == "award":
+        cols = ("source,title,category,cpv_code,cpv_description,buyer_name,"
+                "buyer_region,country,"
+                "awarded_supplier_name,awarded_supplier_id,awarded_supplier_count,"
+                "awarded_value_amount,awarded_value_currency,"
+                "awarded_date,contract_start_date,contract_end_date,"
+                "value_amount,notice_url,source_api_url,ocid")
+    else:
+        cols = ("source,title,category,cpv_code,cpv_description,buyer_name,"
+                "buyer_region,country,value_amount,value_currency,"
+                "published_date,deadline,status,is_open,notice_url,source_api_url")
     conn = db.connect()
     try:
         cur = conn.execute(

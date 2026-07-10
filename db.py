@@ -7,17 +7,32 @@ import sqlite3
 from pathlib import Path
 from typing import Iterable, Optional
 
-from schema import Tender, COLUMNS, CREATE_TABLE_SQL
+from schema import Tender, COLUMNS, CREATE_TABLE_SQL, POST_V1_COLUMNS, POST_V1_INDEXES
 
 DATA_DIR = Path(__file__).resolve().parent / "data"
 DB_PATH = DATA_DIR / "tenders.db"
 CSV_PATH = DATA_DIR / "tenders.csv"
 
 
+def _ensure_columns(conn: sqlite3.Connection) -> None:
+    """Idempotent live migration: adds any POST_V1_COLUMNS the current table
+    doesn't have (SQLite lacks IF NOT EXISTS on ALTER TABLE ADD COLUMN, so we
+    check first via PRAGMA), then creates their indexes once the columns
+    exist."""
+    existing = {r[1] for r in conn.execute("PRAGMA table_info(tenders)")}
+    for name, coltype in POST_V1_COLUMNS:
+        if name not in existing:
+            conn.execute(f"ALTER TABLE tenders ADD COLUMN {name} {coltype}")
+    for stmt in POST_V1_INDEXES:
+        conn.execute(stmt)
+    conn.commit()
+
+
 def connect(db_path: Path = DB_PATH) -> sqlite3.Connection:
     DATA_DIR.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(db_path)
     conn.executescript(CREATE_TABLE_SQL)
+    _ensure_columns(conn)
     return conn
 
 

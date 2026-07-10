@@ -32,6 +32,10 @@
       <div class="topbar__title"><span class="accent">Bid</span>Gov Compass<span class="topbar__sub">Tender Intelligence</span></div>
     </div>
   </div>
+  <nav class="topnav" aria-label="Primary">
+    <a class="topnav__link is-active" href="{{ url_for('home') }}">Opportunities</a>
+    <a class="topnav__link" href="{{ url_for('awards_page') }}">Won Contracts</a>
+  </nav>
   <div class="topbar__actions">
     <span id="lastUpdated" class="topbar__meta"></span>
     <button id="scrapeBtn"  class="btn btn--primary">Scrape now</button>
