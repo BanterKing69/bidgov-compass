@@ -2,28 +2,57 @@
    BidGov Compass — brand system
    Base #54565B (Gov) · Accent #E03C31 (Bid) · Bg #F8F7F5 · Cards #FFFFFF
    Fonts: Poppins 600/700 (heads) + Inter 400/500 (body)
+
+   Design principles (per apple-ui-design):
+     * Content-first — UI recedes; whitespace does the work
+     * Deference — layout supports the data, never competes with it
+     * Depth — soft shadows + subtle blur > hard borders
+     * Motion — 200–300ms cubic-bezier, never jarring
    ========================================================================= */
 
 :root {
-  --gov:            #54565B;   /* base charcoal — headings, chrome */
+  /* Brand palette (unchanged) */
+  --gov:            #54565B;
   --gov-strong:     #3D3F44;
   --gov-soft:       #75777D;
-  --bid:            #E03C31;   /* accent red — CTAs, deadline highlights */
+  --bid:            #E03C31;
   --bid-hover:      #C22F26;
-  --bid-tint:       #FCEAE8;   /* soft red wash for banners */
+  --bid-tint:       #FCEAE8;
   --bg:             #F8F7F5;
   --card:           #FFFFFF;
-  --muted:          #8A8D91;   /* secondary text */
-  --line:           #E7E6E3;   /* hairlines */
+  --muted:          #8A8D91;
+  --line:           #E7E6E3;
   --line-strong:    #D5D3CF;
   --success:        #2E7D5B;
   --warn:           #B7791F;
-  --radius:         10px;
-  --radius-sm:      6px;
-  --shadow-1:       0 1px 2px rgba(84, 86, 91, .05), 0 1px 1px rgba(84, 86, 91, .04);
-  --shadow-2:       0 4px 14px rgba(84, 86, 91, .08);
-  --f-head:         'Poppins', system-ui, -apple-system, sans-serif;
-  --f-body:         'Inter', system-ui, -apple-system, sans-serif;
+
+  /* Spacing rhythm — 4/8/16/24/48/96 */
+  --space-xs:  4px;
+  --space-sm:  8px;
+  --space-md:  16px;
+  --space-lg:  24px;
+  --space-xl:  48px;
+  --space-2xl: 96px;
+
+  /* Radii — softer than before to match Apple's cushioned rectangles */
+  --radius-sm: 8px;
+  --radius:    12px;
+  --radius-lg: 18px;
+  --radius-pill: 999px;
+
+  /* Elevation — soft, layered shadows (no hard 1px borders as chrome) */
+  --shadow-1: 0 1px 2px rgba(84, 86, 91, .04), 0 1px 3px rgba(84, 86, 91, .05);
+  --shadow-2: 0 4px 12px rgba(84, 86, 91, .06), 0 2px 6px rgba(84, 86, 91, .04);
+  --shadow-3: 0 12px 32px rgba(84, 86, 91, .10), 0 4px 12px rgba(84, 86, 91, .06);
+
+  /* Motion */
+  --ease:     cubic-bezier(0.25, 0.1, 0.25, 1);
+  --dur-fast: 150ms;
+  --dur:      220ms;
+
+  /* Fonts (retained per brief) */
+  --f-head: 'Poppins', -apple-system, BlinkMacSystemFont, 'SF Pro Display', system-ui, sans-serif;
+  --f-body: 'Inter', -apple-system, BlinkMacSystemFont, 'SF Pro Text', system-ui, sans-serif;
 }
 
 /* ---------- Reset + base ---------- */
@@ -39,23 +68,46 @@ body {
   -moz-osx-font-smoothing: grayscale;
   font-size: 14px;
   line-height: 1.5;
+  font-feature-settings: 'ss01', 'cv11';  /* Inter alt figures */
 }
-h1, h2, h3, h4 { font-family: var(--f-head); font-weight: 700; color: var(--gov); margin: 0; }
-h1 { font-size: 22px; letter-spacing: -0.01em; }
+h1, h2, h3, h4 { font-family: var(--f-head); font-weight: 700; color: var(--gov); margin: 0; letter-spacing: -0.011em; }
+h1 { font-size: 22px; }
 h2 { font-size: 17px; font-weight: 600; }
 h3 { font-size: 14px; font-weight: 600; text-transform: uppercase; letter-spacing: .06em; color: var(--gov-soft); }
-a  { color: var(--bid); text-decoration: none; }
-a:hover { color: var(--bid-hover); text-decoration: underline; }
+a  { color: var(--bid); text-decoration: none; transition: color var(--dur-fast) var(--ease); }
+a:hover { color: var(--bid-hover); text-decoration: underline; text-underline-offset: 2px; }
 input, select, button, textarea { font: inherit; color: inherit; }
+
+/* Global tabular-numerals for any element rendering figures — no jitter as
+   numbers change across refreshes. */
+.num, .kpi__value, table.tenders td.num, .stat, .figure {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum' 1;
+}
+
+/* Focus visibility — accessible without being ugly. Apple-style: only shows on
+   keyboard navigation, not mouse-click. */
+*:focus { outline: none; }
+*:focus-visible {
+  outline: 2px solid var(--bid);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+
+/* Selection colour on-brand */
+::selection { background: var(--bid-tint); color: var(--bid-hover); }
 
 /* ---------- Top bar ---------- */
 .topbar {
   height: 60px;
-  background: var(--gov);
+  background: rgba(84, 86, 91, 0.92);   /* translucent for depth */
+  backdrop-filter: saturate(180%) blur(20px);
+  -webkit-backdrop-filter: saturate(180%) blur(20px);
   color: #fff;
-  padding: 0 22px;
-  display: flex; align-items: center; gap: 18px;
-  box-shadow: var(--shadow-1);
+  padding: 0 var(--space-lg);
+  display: flex; align-items: center; gap: var(--space-md);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.04) inset,
+              0 1px 3px rgba(0, 0, 0, 0.10);
   position: sticky; top: 0; z-index: 30;
 }
 .topbar__brand { display: flex; align-items: center; gap: 12px; }
@@ -77,33 +129,75 @@ input, select, button, textarea { font: inherit; color: inherit; }
 .topbar__meta { color: rgba(255,255,255,.7); font-size: 12px; margin-right: 6px; }
 
 /* ---------- Buttons ---------- */
+/* Pill shape, subtle hover-lift + brightness. Apple's "cushioned" affordance. */
 .btn {
-  display: inline-flex; align-items: center; gap: 8px;
-  padding: 8px 14px;
-  border-radius: var(--radius-sm);
+  display: inline-flex; align-items: center; gap: var(--space-sm);
+  min-height: 36px;        /* touch target ≥ 36; primary CTAs 44+ */
+  padding: 8px 16px;
+  border-radius: var(--radius-pill);
   border: 1px solid transparent;
   font-family: var(--f-body); font-weight: 500; font-size: 13px;
-  cursor: pointer; transition: background .15s, border-color .15s, color .15s;
+  cursor: pointer;
+  transition: background var(--dur-fast) var(--ease),
+              border-color var(--dur-fast) var(--ease),
+              transform var(--dur-fast) var(--ease),
+              filter var(--dur-fast) var(--ease),
+              box-shadow var(--dur-fast) var(--ease);
   white-space: nowrap;
+  user-select: none;
 }
-.btn--primary   { background: var(--bid); color: #fff; }
-.btn--primary:hover { background: var(--bid-hover); }
-.btn--ghost     { background: transparent; color: #fff; border-color: rgba(255,255,255,.25); }
-.btn--ghost:hover { background: rgba(255,255,255,.08); border-color: rgba(255,255,255,.45); }
-.btn--secondary { background: var(--card); color: var(--gov); border-color: var(--line-strong); }
-.btn--secondary:hover { border-color: var(--gov-soft); }
-.btn:disabled   { opacity: .55; cursor: not-allowed; }
-.btn--sm        { padding: 6px 10px; font-size: 12px; }
+.btn:active { transform: translateY(1px); }
+
+.btn--primary {
+  background: var(--bid); color: #fff;
+  box-shadow: 0 1px 2px rgba(224, 60, 49, .35),
+              0 4px 12px rgba(224, 60, 49, .18);
+}
+.btn--primary:hover { background: var(--bid-hover); filter: brightness(1.03); }
+
+.btn--ghost {
+  background: rgba(255, 255, 255, .08);
+  color: #fff;
+  border-color: rgba(255, 255, 255, .18);
+  backdrop-filter: blur(10px);
+}
+.btn--ghost:hover { background: rgba(255, 255, 255, .18); border-color: rgba(255, 255, 255, .35); }
+
+.btn--secondary {
+  background: var(--card); color: var(--gov);
+  border-color: var(--line-strong);
+  box-shadow: var(--shadow-1);
+}
+.btn--secondary:hover { border-color: var(--gov-soft); box-shadow: var(--shadow-2); }
+
+.btn:disabled { opacity: .55; cursor: not-allowed; }
+.btn--sm      { min-height: 30px; padding: 6px 12px; font-size: 12px; }
 
 /* ---------- Layout ---------- */
 .layout { display: grid; grid-template-columns: 280px 1fr; min-height: calc(100vh - 60px); }
 .sidebar {
   background: var(--card);
   border-right: 1px solid var(--line);
-  padding: 20px 18px;
+  padding: var(--space-lg) var(--space-md);
   overflow-y: auto;
 }
-.main { padding: 22px 26px 40px; overflow-x: hidden; }
+.main {
+  padding: var(--space-lg) var(--space-lg) var(--space-xl);
+  overflow-x: hidden;
+  max-width: 1560px;              /* readable line-length ceiling on huge screens */
+}
+/* Subtle in-view animation for the primary content blocks */
+.kpis, .panel, .tabs, .tab-panel { animation: fadeUp .35s var(--ease) both; }
+.panel { animation-delay: .04s; }
+.tabs  { animation-delay: .08s; }
+.tab-panel { animation-delay: .12s; }
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0);   }
+}
+@media (prefers-reduced-motion: reduce) {
+  * { animation: none !important; transition: none !important; }
+}
 
 /* ---------- Filters (sidebar) ---------- */
 .filter-group { margin-bottom: 20px; }
@@ -133,25 +227,51 @@ input, select, button, textarea { font: inherit; color: inherit; }
 .sidebar__foot .btn { flex: 1; }
 
 /* ---------- KPI row ---------- */
-.kpis { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 18px; }
-.kpi {
-  background: var(--card); border: 1px solid var(--line);
-  border-radius: var(--radius); padding: 14px 16px; box-shadow: var(--shadow-1);
+.kpis {
+  display: grid; grid-template-columns: repeat(4, 1fr);
+  gap: var(--space-md); margin-bottom: var(--space-lg);
 }
-.kpi__label { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .06em; margin-bottom: 6px; }
-.kpi__value { font-family: var(--f-head); font-weight: 700; font-size: 22px; color: var(--gov); }
-.kpi__delta { margin-top: 6px; font-size: 12px; color: var(--muted); }
+.kpi {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: var(--space-md) var(--space-lg);
+  box-shadow: var(--shadow-1);
+  transition: box-shadow var(--dur) var(--ease), transform var(--dur) var(--ease);
+}
+.kpi:hover { box-shadow: var(--shadow-2); }
+.kpi__label {
+  color: var(--muted); font-size: 11px;
+  text-transform: uppercase; letter-spacing: .06em;
+  margin-bottom: var(--space-sm);
+}
+.kpi__value {
+  font-family: var(--f-head); font-weight: 700;
+  font-size: 26px; line-height: 1.1; color: var(--gov);
+  letter-spacing: -0.02em;
+}
+.kpi__delta { margin-top: var(--space-sm); font-size: 12px; color: var(--muted); }
 .kpi--accent .kpi__value { color: var(--bid); }
 
 /* ---------- Cards / panels ---------- */
 .panel {
-  background: var(--card); border: 1px solid var(--line); border-radius: var(--radius);
-  box-shadow: var(--shadow-1); padding: 16px 18px; margin-bottom: 18px;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-1);
+  padding: var(--space-md) var(--space-lg);
+  margin-bottom: var(--space-md);
 }
-.panel__head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 12px; gap: 12px; }
-.panel__title { font-family: var(--f-head); font-weight: 600; font-size: 15px; color: var(--gov); }
+.panel__head {
+  display: flex; justify-content: space-between; align-items: baseline;
+  margin-bottom: var(--space-md); gap: var(--space-md);
+}
+.panel__title {
+  font-family: var(--f-head); font-weight: 600; font-size: 15px; color: var(--gov);
+  letter-spacing: -0.005em;
+}
 .panel__meta  { font-size: 12px; color: var(--muted); }
-.charts { display: grid; grid-template-columns: 1.4fr 1fr 1fr; gap: 14px; }
+.charts { display: grid; grid-template-columns: 1.4fr 1fr 1fr; gap: var(--space-md); }
 .chart-wrap { position: relative; height: 240px; }
 
 /* ---------- Tabs ---------- */
@@ -185,18 +305,77 @@ table.tenders thead th {
   border-bottom: 1px solid var(--line-strong);
   position: sticky; top: 0;
 }
-table.tenders tbody td { padding: 10px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
-table.tenders tbody tr:hover { background: #FAF9F7; }
-table.tenders td.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+table.tenders tbody td {
+  padding: 12px; border-bottom: 1px solid var(--line);
+  vertical-align: top;
+  transition: background var(--dur-fast) var(--ease);
+}
+table.tenders tbody tr:hover td { background: #FAF9F7; }
+table.tenders td.num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum' 1;
+  white-space: nowrap;
+  min-width: 90px;                   /* prevents column width jitter on refresh */
+}
 table.tenders td.title a { color: var(--gov); font-weight: 500; }
 table.tenders td.title a:hover { color: var(--bid); }
-.deadline--soon { color: var(--bid); font-weight: 600; }
+
+/* Deadline urgency system: red for ≤ this week, amber for month, default beyond. */
+.deadline { display: flex; flex-direction: column; gap: 2px; line-height: 1.2; }
+.deadline__abs {
+  font-variant-numeric: tabular-nums; white-space: nowrap;
+}
+.deadline__rel {
+  font-size: 11px; color: var(--muted); white-space: nowrap;
+}
+table.tenders td.is-urgent .deadline__abs { color: var(--bid); font-weight: 600; }
+table.tenders td.is-urgent .deadline__rel { color: var(--bid); font-weight: 500; }
+table.tenders td.is-soon   .deadline__abs { color: var(--warn); font-weight: 500; }
+table.tenders td.is-soon   .deadline__rel { color: var(--warn); }
+
 .pill {
-  display: inline-block; padding: 2px 8px; border-radius: 999px;
-  font-size: 11px; font-weight: 500; background: #EEF; color: var(--gov);
+  display: inline-block; padding: 3px 10px;
+  border-radius: var(--radius-pill);
+  font-size: 11px; font-weight: 500;
+  background: #F1EFEC; color: var(--gov);
+  border: 1px solid transparent;
 }
 .pill--cat { background: #F1EFEC; color: var(--gov); }
 .pill--src { background: #E9EEF2; color: var(--gov-strong); }
+
+/* Empty state */
+.empty {
+  text-align: center;
+  padding: var(--space-xl) var(--space-lg);
+}
+.empty__title {
+  font-family: var(--f-head); font-weight: 600; font-size: 15px;
+  color: var(--gov); margin-bottom: var(--space-sm);
+}
+.empty__body {
+  color: var(--muted); font-size: 13px;
+  margin-bottom: var(--space-md);
+}
+
+/* Toast (non-blocking error banner) */
+.toast {
+  position: fixed;
+  right: var(--space-lg); bottom: var(--space-lg);
+  background: var(--gov);
+  color: #fff;
+  padding: 12px 18px;
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-3);
+  font-size: 13px;
+  max-width: 380px;
+  opacity: 0; transform: translateY(8px);
+  pointer-events: none;
+  transition: opacity var(--dur) var(--ease), transform var(--dur) var(--ease);
+  z-index: 60;
+  border-left: 3px solid var(--bid);
+}
+.toast.is-open { opacity: 1; transform: translateY(0); pointer-events: auto; }
 
 /* ---------- Chat ---------- */
 .chat {

@@ -22,25 +22,139 @@
   const $ = (sel, root = document) => root.querySelector(sel);
   const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
 
-  const money = v => {
+  // Locale-aware, tabular, deterministic. All money/number formatting in the
+  // portal MUST go through these helpers — no ad-hoc `toLocaleString()` calls.
+  const NF_GBP0 = new Intl.NumberFormat('en-GB', {
+    style: 'currency', currency: 'GBP',
+    maximumFractionDigits: 0, minimumFractionDigits: 0,
+  });
+  const NF_INT = new Intl.NumberFormat('en-GB');
+  const DTF_DATE = new Intl.DateTimeFormat('en-GB', {
+    day: '2-digit', month: 'short', year: 'numeric',
+  });
+  const DTF_DATETIME = new Intl.DateTimeFormat('en-GB', {
+    day: '2-digit', month: 'short', year: 'numeric',
+    hour: '2-digit', minute: '2-digit',
+  });
+
+  /**
+   * fmtGBP — abbreviated currency ("£120k", "£1.2m", "£1.20bn").
+   * Consistent 1-decimal for m/bn, 0-decimal for k, full amount if <£1k.
+   * Returns an em-dash for unknown/nully.
+   */
+  function fmtGBP(v) {
     if (v == null || isNaN(v)) return '–';
     const n = Number(v);
-    if (n >= 1e9) return '£' + (n / 1e9).toFixed(2) + 'bn';
-    if (n >= 1e6) return '£' + (n / 1e6).toFixed(2) + 'm';
-    if (n >= 1e3) return '£' + (n / 1e3).toFixed(0) + 'k';
-    return '£' + n.toLocaleString();
-  };
-  const numFmt = v => (v ?? 0).toLocaleString();
-  const fmtDate = iso => iso ? String(iso).slice(0, 10) : '';
-  const daysUntil = iso => {
+    const abs = Math.abs(n);
+    const sign = n < 0 ? '-' : '';
+    if (abs >= 1e9) return `${sign}£${(abs / 1e9).toFixed(2)}bn`;
+    if (abs >= 1e6) return `${sign}£${(abs / 1e6).toFixed(1)}m`;
+    if (abs >= 1e3) return `${sign}£${Math.round(abs / 1e3)}k`;
+    return NF_GBP0.format(n);
+  }
+  /** Full-precision, comma-separated for tooltips: "£1,234,567". */
+  const fmtGBPFull = v => (v == null || isNaN(v)) ? '–' : NF_GBP0.format(Number(v));
+
+  /** Locale-aware integer with thousands separators. */
+  const fmtInt = v => (v == null || isNaN(v)) ? '0' : NF_INT.format(Number(v));
+
+  /** ISO -> "10 Jul 2026" (empty string on null/invalid). */
+  function fmtDate(iso) {
+    if (!iso) return '';
+    const d = new Date(iso);
+    return isNaN(d) ? '' : DTF_DATE.format(d);
+  }
+  /** ISO -> "10 Jul 2026, 14:30". */
+  function fmtDateTime(iso) {
+    if (!iso) return '';
+    const d = new Date(iso);
+    return isNaN(d) ? '' : DTF_DATETIME.format(d);
+  }
+
+  function daysUntil(iso) {
     if (!iso) return null;
-    const ms = new Date(iso).getTime() - Date.now();
-    return Math.round(ms / 86400000);
-  };
+    const t = new Date(iso).getTime();
+    if (isNaN(t)) return null;
+    // whole-day rounding at midnight, not now — so "closing today at 5pm" is 0 days.
+    const now = new Date(); now.setHours(0, 0, 0, 0);
+    const target = new Date(iso); target.setHours(0, 0, 0, 0);
+    return Math.round((target - now) / 86400000);
+  }
+
+  /**
+   * Human-relative deadline label: "today", "tomorrow", "in 3 days",
+   * "in 2 weeks", "in 4 months", "3 months ago". Returns "" if no deadline.
+   */
+  function fmtRelDeadline(iso) {
+    const d = daysUntil(iso);
+    if (d == null) return '';
+    if (d < 0) {
+      const p = -d;
+      if (p === 1) return 'yesterday';
+      if (p < 7) return `${p} days ago`;
+      if (p < 30) return `${Math.round(p/7)} wk ago`;
+      if (p < 365) return `${Math.round(p/30)} mo ago`;
+      return `${Math.round(p/365)} yr ago`;
+    }
+    if (d === 0) return 'today';
+    if (d === 1) return 'tomorrow';
+    if (d < 7) return `in ${d} days`;
+    if (d < 30) return `in ${Math.round(d/7)} wk`;
+    if (d < 365) return `in ${Math.round(d/30)} mo`;
+    return `in ${Math.round(d/365)} yr`;
+  }
+
+  /** Urgency bucket for a deadline: today | week | month | later | past | none. */
+  function deadlineUrgency(iso) {
+    const d = daysUntil(iso);
+    if (d == null) return 'none';
+    if (d < 0) return 'past';
+    if (d === 0) return 'today';
+    if (d <= 7) return 'week';
+    if (d <= 30) return 'month';
+    return 'later';
+  }
+
   const escapeHtml = s => String(s ?? '').replace(/[&<>"']/g, m =>
     ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[m]));
 
-  // ---- Filter state → query string --------------------------------------
+  /** Non-blocking inline error banner (top of main). Auto-dismisses after 6s. */
+  function showError(message) {
+    let el = $('#toast');
+    if (!el) {
+      el = document.createElement('div');
+      el.id = 'toast';
+      el.className = 'toast';
+      el.setAttribute('role', 'alert');
+      document.body.appendChild(el);
+    }
+    el.textContent = String(message || 'Something went wrong.');
+    el.classList.add('is-open');
+    clearTimeout(showError._t);
+    showError._t = setTimeout(() => el.classList.remove('is-open'), 6000);
+  }
+
+  /** Fetch wrapper with JSON parsing + friendly error surfacing. */
+  async function api(url, opts) {
+    try {
+      const r = await fetch(url, opts);
+      if (r.status === 401) {
+        // Session expired — bounce to login.
+        window.location = '/auth/login?next=' + encodeURIComponent(location.pathname);
+        return null;
+      }
+      if (!r.ok) throw new Error(`${r.status} ${r.statusText}`);
+      return await r.json();
+    } catch (err) {
+      showError(`Request failed: ${err.message}`);
+      throw err;
+    }
+  }
+
+  // ---- Filter state ⇄ query string --------------------------------------
+  // Single source of truth: the DOM. buildQuery() serialises DOM -> URLSearchParams.
+  // pushUrlState() mirrors it into location.search so pages are shareable and
+  // the browser back button restores filters. loadFromUrl() reads the URL on boot.
   function buildQuery() {
     const p = new URLSearchParams();
     p.set('open_only', $('#fltOpen').value);
@@ -63,9 +177,36 @@
     return p;
   }
 
+  function pushUrlState() {
+    const p = buildQuery();
+    // omit the default "open_only=1" so URL stays clean when at defaults
+    if (p.get('open_only') === '1') p.delete('open_only');
+    // sort defaults to "deadline"
+    if (p.get('sort') === 'deadline') p.delete('sort');
+    const qs = p.toString();
+    const url = qs ? `${location.pathname}?${qs}` : location.pathname;
+    history.replaceState(null, '', url + location.hash);
+  }
+
+  function loadFromUrl() {
+    const p = new URLSearchParams(location.search);
+    if (p.has('open_only')) $('#fltOpen').value = p.get('open_only');
+    if (p.has('q')) $('#fltQ').value = p.get('q');
+    if (p.has('value_min')) $('#fltMin').value = p.get('value_min');
+    if (p.has('value_max')) $('#fltMax').value = p.get('value_max');
+    if (p.has('deadline_after')) $('#fltAfter').value = p.get('deadline_after');
+    if (p.has('deadline_before')) $('#fltBefore').value = p.get('deadline_before');
+    if (p.has('sort')) $('#sortSel').value = p.get('sort');
+    const cats = new Set(p.getAll('category'));
+    $$('#fltCategory input').forEach(el => { el.checked = cats.has(el.value); });
+    const srcs = new Set(p.getAll('source'));
+    $$('#fltSource input').forEach(el => { el.checked = srcs.has(el.value); });
+  }
+
   // ---- Facet loader (populates checklists) ------------------------------
   async function loadFacets() {
-    const r = await fetch('/api/facets').then(r => r.json());
+    const r = await api('/api/facets');
+    if (!r) return;
     const catBox = $('#fltCategory'), srcBox = $('#fltSource');
     catBox.innerHTML = r.categories.map(c =>
       `<label><input type="checkbox" value="${escapeHtml(c)}">${escapeHtml(c)}</label>`
@@ -82,14 +223,32 @@
     charts[id] = new Chart(document.getElementById(id).getContext('2d'), cfg);
   }
 
+  /** Write a KPI value + optional title (tooltip on hover for full-precision). */
+  function setKpi(id, value, tooltip, sublabel) {
+    const el = $('#' + id);
+    if (!el) return;
+    el.textContent = value;
+    if (tooltip) el.title = tooltip; else el.removeAttribute('title');
+    const kpi = el.closest('.kpi');
+    if (kpi && sublabel) {
+      const s = kpi.querySelector('.kpi__delta');
+      if (s) s.textContent = sublabel;
+    }
+  }
+
   async function refreshStats() {
     const p = buildQuery();
-    const s = await fetch('/api/stats?' + p.toString()).then(r => r.json());
+    const s = await api('/api/stats?' + p.toString());
+    if (!s) return;
+    const t = s.totals;
 
-    $('#kpiTotal').textContent = numFmt(s.totals.notices);
-    $('#kpiOpen').textContent  = numFmt(s.totals.open);
-    $('#kpiValue').textContent = money(s.totals.total_value);
-    $('#kpiAvg').textContent   = money(s.totals.avg_value);
+    // KPIs — median (not mean) resists skew from megaframeworks.
+    setKpi('kpiTotal', fmtInt(t.notices), null, 'Notices matching your filters');
+    setKpi('kpiOpen',  fmtInt(t.open),  null, 'Deadline in the future');
+    setKpi('kpiValue', fmtGBP(t.median_value), fmtGBPFull(t.median_value),
+           `Median contract value · P90 ${fmtGBP(t.p90_value)}`);
+    setKpi('kpiAvg',   fmtInt(t.sweet_spot_count), null,
+           `£50k–£300k, mapped to a sweet-spot category · in-range total ${fmtGBP(t.in_range_total)}`);
 
     // -- Category pie (top 10 + Other) --
     const catRows = s.by_category.slice(0, 10);
@@ -191,11 +350,11 @@
           title: { display: true, text: 'Top categories by total contract value',
                    font: { family: 'Poppins', weight: '600', size: 13 } },
           legend: { display: false },
-          tooltip: { callbacks: { label: ctx => money(ctx.raw) } }
+          tooltip: { callbacks: { label: ctx => fmtGBPFull(ctx.raw) } }
         },
         scales: {
           x: { grid: { display: false }, ticks: { autoSkip: false, maxRotation: 45, minRotation: 30, font: { size: 10 } } },
-          y: { grid: { color: C.line }, ticks: { callback: v => money(v) } }
+          y: { grid: { color: C.line }, ticks: { callback: v => fmtGBP(v) } }
         }
       }
     });
@@ -205,36 +364,64 @@
   async function refreshTable() {
     const p = buildQuery();
     p.set('limit', 500);
-    const r = await fetch('/api/tenders?' + p.toString()).then(r => r.json());
+    const r = await api('/api/tenders?' + p.toString());
+    if (!r) return;
+
     const tbody = $('#tblBody');
     if (!r.rows.length) {
-      tbody.innerHTML = '<tr><td colspan="6" class="center muted">No matching tenders.</td></tr>';
+      // Rich empty state — one primary action (clear filters)
+      tbody.innerHTML = `
+        <tr><td colspan="6">
+          <div class="empty">
+            <div class="empty__title">No tenders match your filters.</div>
+            <div class="empty__body">Try widening the value range or removing category filters.</div>
+            <button class="btn btn--secondary" onclick="document.getElementById('resetBtn').click()">Clear all filters</button>
+          </div>
+        </td></tr>`;
     } else {
-      tbody.innerHTML = r.rows.map(t => {
-        const d = daysUntil(t.deadline);
-        const dlCls = (d != null && d <= 7 && d >= 0) ? 'deadline--soon' : '';
-        const link = t.notice_url
-          ? `<a href="${escapeHtml(t.notice_url)}" target="_blank" rel="noopener">${escapeHtml(t.title)}</a>`
-          : escapeHtml(t.title);
-        return `<tr>
-          <td class="title">${link}</td>
-          <td>${escapeHtml(t.buyer_name || '')}</td>
-          <td>${t.category ? `<span class="pill pill--cat">${escapeHtml(t.category)}</span>` : '<span class="muted">–</span>'}</td>
-          <td class="num">${t.value_amount != null ? money(t.value_amount) : '<span class="muted">–</span>'}</td>
-          <td class="${dlCls}">${fmtDate(t.deadline) || '<span class="muted">–</span>'}${d != null && d <= 7 && d >= 0 ? ` <span style="font-size:11px">(${d}d)</span>` : ''}</td>
-          <td><span class="pill pill--src">${escapeHtml(t.source)}</span></td>
-        </tr>`;
-      }).join('');
+      tbody.innerHTML = r.rows.map(rowHtml).join('');
     }
-    $('#tblFoot').textContent =
-      `Showing ${r.returned.toLocaleString()} of ${r.total.toLocaleString()} matching notices` +
-      (r.returned < r.total ? ' (limit 500 — refine filters to narrow).' : '.');
+
+    // Result count — high-signal, one line
+    const shown = fmtInt(r.returned);
+    const total = fmtInt(r.total);
+    $('#tblFoot').innerHTML = r.returned < r.total
+      ? `Showing <b>${shown}</b> of <b>${total}</b> matching notices <span class="muted">(500 row limit — refine filters to narrow)</span>`
+      : `<b>${total}</b> matching notice${r.total === 1 ? '' : 's'}`;
+  }
+
+  function rowHtml(t) {
+    const urgency = deadlineUrgency(t.deadline);
+    const dlCls = urgency === 'today' || urgency === 'week' ? 'is-urgent'
+                : urgency === 'month' ? 'is-soon' : '';
+    const rel = fmtRelDeadline(t.deadline);
+    const link = t.notice_url
+      ? `<a href="${escapeHtml(t.notice_url)}" target="_blank" rel="noopener" title="Open notice on source portal">${escapeHtml(t.title)}</a>`
+      : escapeHtml(t.title);
+
+    const value = t.value_amount != null
+      ? `<span title="${escapeHtml(fmtGBPFull(t.value_amount))}${t.value_currency && t.value_currency !== 'GBP' ? ' (' + escapeHtml(t.value_currency) + ')' : ''}">${fmtGBP(t.value_amount)}</span>`
+      : `<span class="muted">–</span>`;
+
+    const deadline = t.deadline
+      ? `<div class="deadline"><span class="deadline__abs">${fmtDate(t.deadline)}</span><span class="deadline__rel">${escapeHtml(rel)}</span></div>`
+      : `<span class="muted">–</span>`;
+
+    return `<tr>
+      <td class="title">${link}</td>
+      <td>${escapeHtml(t.buyer_name || '')}</td>
+      <td>${t.category ? `<span class="pill pill--cat">${escapeHtml(t.category)}</span>` : '<span class="muted">–</span>'}</td>
+      <td class="num">${value}</td>
+      <td class="${dlCls}">${deadline}</td>
+      <td><span class="pill pill--src">${escapeHtml(t.source)}</span></td>
+    </tr>`;
   }
 
   // ---- Pivot --------------------------------------------------------------
   async function refreshPivot() {
     const p = buildQuery();
-    const r = await fetch('/api/pivot?' + p.toString()).then(r => r.json());
+    const r = await api('/api/pivot?' + p.toString());
+    if (!r) return;
     const records = r.rows.map(row => {
       const o = {};
       r.columns.forEach((c, i) => o[c] = row[i]);
@@ -526,6 +713,7 @@
   function refresh(delay = 0) {
     clearTimeout(refreshTimer);
     refreshTimer = setTimeout(async () => {
+      pushUrlState();                         // shareable URL for the current filter state
       await Promise.all([refreshStats(), refreshTable()]);
       // pivot is heavy; only refresh when its tab is active
       if ($('#tab-pivot').classList.contains('is-active')) refreshPivot();
@@ -673,13 +861,20 @@
       const head = '<tr>' + cols.map(c => `<th>${escapeHtml(c)}</th>`).join('') + '</tr>';
       const body = shown.map(r => '<tr>' + r.map((c, i) => {
         if (c == null) return '<td class="muted">–</td>';
-        if (cols[i] === 'notice_url' && typeof c === 'string' && c.startsWith('http'))
+        const col = cols[i] || '';
+        if (col === 'notice_url' && typeof c === 'string' && c.startsWith('http'))
           return `<td><a href="${escapeHtml(c)}" target="_blank" rel="noopener">open ↗</a></td>`;
-        if (cols[i]?.includes('value')) return `<td>${money(c)}</td>`;
-        return `<td>${escapeHtml(String(c).slice(0, 90))}</td>`;
+        if (/value|total|amount|gbp/i.test(col) && typeof c === 'number')
+          return `<td class="num" title="${escapeHtml(fmtGBPFull(c))}">${fmtGBP(c)}</td>`;
+        if (/count|open_count|notices?/i.test(col) && typeof c === 'number')
+          return `<td class="num">${fmtInt(c)}</td>`;
+        if (col === 'deadline' || col === 'published_date') {
+          return `<td title="${escapeHtml(String(c))}">${fmtDate(c)}</td>`;
+        }
+        return `<td>${escapeHtml(String(c).slice(0, 120))}</td>`;
       }).join('') + '</tr>').join('');
       return `<div class="chat__result"><table><thead>${head}</thead><tbody>${body}</tbody></table></div>` +
-             (rows.length > shown.length ? `<div class="muted" style="margin-top:6px;font-size:11px">Showing first ${shown.length} of ${rows.length}.</div>` : '');
+             (rows.length > shown.length ? `<div class="muted" style="margin-top:6px;font-size:11px">Showing first ${fmtInt(shown.length)} of ${fmtInt(rows.length)}.</div>` : '');
     };
 
     const renderFollowUps = (list) => {
@@ -709,8 +904,8 @@
             legend: { display: false },
             tooltip: {
               callbacks: {
-                label: ctx => /value/i.test(chart.value_col)
-                  ? money(ctx.raw) : numFmt(ctx.raw),
+                label: ctx => /value|total|amount|gbp/i.test(chart.value_col)
+                  ? fmtGBPFull(ctx.raw) : fmtInt(ctx.raw),
               }
             }
           },
@@ -718,7 +913,7 @@
             x: { grid: { display: false },
                  ticks: { autoSkip: false, maxRotation: 40, minRotation: 20, font: { size: 10 } } },
             y: { grid: { color: C.line },
-                 ticks: { callback: v => /value/i.test(chart.value_col) ? money(v) : v } }
+                 ticks: { callback: v => /value|total|amount|gbp/i.test(chart.value_col) ? fmtGBP(v) : fmtInt(v) } }
           }
         }
       });
@@ -771,20 +966,22 @@
   // ---- Last-updated stamp ------------------------------------------------
   function stampLastUpdated(iso) {
     if (!iso) return;
-    const d = new Date(iso);
-    $('#lastUpdated').textContent = 'Last scrape: ' + d.toLocaleString();
+    $('#lastUpdated').textContent = 'Last scrape: ' + fmtDateTime(iso);
   }
 
   // ---- Boot -------------------------------------------------------------
   async function boot() {
     await loadFacets();
+    loadFromUrl();                           // restore filters from ?query BEFORE first refresh
     wireFilters(); wireTabs(); wireExport(); wireScrape(); wireChat();
     wireHeaderSort(); wireHeaderFilters();
     await refresh();
     paintFilterActive();
     // if a scrape ran previously, surface it
-    const s = await fetch('/api/scrape/status').then(r => r.json());
-    if (s.finished_at) stampLastUpdated(s.finished_at);
+    const s = await api('/api/scrape/status');
+    if (s && s.finished_at) stampLastUpdated(s.finished_at);
+    // Back/forward-button aware
+    window.addEventListener('popstate', () => { loadFromUrl(); refresh(); });
   }
 
   boot().catch(err => {

@@ -111,11 +111,27 @@
   <main class="main">
 
     <!-- KPI ROW -->
-    <div class="kpis">
-      <div class="kpi"><div class="kpi__label">Notices matching</div><div id="kpiTotal"  class="kpi__value">–</div><div class="kpi__delta muted">applies to all views</div></div>
-      <div class="kpi kpi--accent"><div class="kpi__label">Open / live</div><div id="kpiOpen"   class="kpi__value">–</div><div class="kpi__delta muted">deadline in future</div></div>
-      <div class="kpi"><div class="kpi__label">Total value (£)</div><div id="kpiValue"  class="kpi__value">–</div><div class="kpi__delta muted">excludes unknown value</div></div>
-      <div class="kpi"><div class="kpi__label">Avg value (£)</div><div id="kpiAvg"    class="kpi__value">–</div><div class="kpi__delta muted">across matched notices</div></div>
+    <div class="kpis" role="region" aria-label="Summary metrics">
+      <div class="kpi">
+        <div class="kpi__label">Matching</div>
+        <div id="kpiTotal" class="kpi__value">–</div>
+        <div class="kpi__delta muted">applies to all views</div>
+      </div>
+      <div class="kpi kpi--accent">
+        <div class="kpi__label">Open / live</div>
+        <div id="kpiOpen" class="kpi__value">–</div>
+        <div class="kpi__delta muted">deadline in the future</div>
+      </div>
+      <div class="kpi">
+        <div class="kpi__label">Median value</div>
+        <div id="kpiValue" class="kpi__value">–</div>
+        <div class="kpi__delta muted">robust to outliers</div>
+      </div>
+      <div class="kpi">
+        <div class="kpi__label">Sweet-spot count</div>
+        <div id="kpiAvg" class="kpi__value">–</div>
+        <div class="kpi__delta muted">£50k–£300k, categorised</div>
+      </div>
     </div>
 
     <!-- CHARTS -->
@@ -159,29 +175,29 @@
         <table class="tenders">
           <thead>
             <tr>
-              <th class="col-h" data-col="title">
-                <button class="col-sort" data-col="title">Title <span class="col-arrow"></span></button>
-                <button class="col-filter" data-col="title" data-kind="search" title="Filter title / buyer">⌕</button>
+              <th class="col-h" data-col="title" scope="col">
+                <button class="col-sort" data-col="title" aria-label="Sort by title">Title <span class="col-arrow" aria-hidden="true"></span></button>
+                <button class="col-filter" data-col="title" data-kind="search" aria-label="Filter title or buyer" title="Filter title / buyer">⌕</button>
               </th>
-              <th class="col-h" data-col="buyer">
-                <button class="col-sort" data-col="buyer">Buyer <span class="col-arrow"></span></button>
-                <button class="col-filter" data-col="buyer" data-kind="search" title="Filter title / buyer">⌕</button>
+              <th class="col-h" data-col="buyer" scope="col">
+                <button class="col-sort" data-col="buyer" aria-label="Sort by buyer">Buyer <span class="col-arrow" aria-hidden="true"></span></button>
+                <button class="col-filter" data-col="buyer" data-kind="search" aria-label="Filter title or buyer" title="Filter title / buyer">⌕</button>
               </th>
-              <th class="col-h" data-col="category">
-                <button class="col-sort" data-col="category">Category <span class="col-arrow"></span></button>
-                <button class="col-filter" data-col="category" data-kind="checklist" title="Filter categories">▾</button>
+              <th class="col-h" data-col="category" scope="col">
+                <button class="col-sort" data-col="category" aria-label="Sort by category">Category <span class="col-arrow" aria-hidden="true"></span></button>
+                <button class="col-filter" data-col="category" data-kind="checklist" aria-label="Filter categories" title="Filter categories">▾</button>
               </th>
-              <th class="col-h num" data-col="value">
-                <button class="col-sort" data-col="value">Value (£) <span class="col-arrow"></span></button>
-                <button class="col-filter" data-col="value" data-kind="range" title="Filter by value">▾</button>
+              <th class="col-h num" data-col="value" scope="col">
+                <button class="col-sort" data-col="value" aria-label="Sort by value">Value <span class="col-arrow" aria-hidden="true"></span></button>
+                <button class="col-filter" data-col="value" data-kind="range" aria-label="Filter by value range" title="Filter by value">▾</button>
               </th>
-              <th class="col-h" data-col="deadline">
-                <button class="col-sort" data-col="deadline">Deadline <span class="col-arrow"></span></button>
-                <button class="col-filter" data-col="deadline" data-kind="daterange" title="Filter by deadline">▾</button>
+              <th class="col-h" data-col="deadline" scope="col">
+                <button class="col-sort" data-col="deadline" aria-label="Sort by deadline">Deadline <span class="col-arrow" aria-hidden="true"></span></button>
+                <button class="col-filter" data-col="deadline" data-kind="daterange" aria-label="Filter by deadline" title="Filter by deadline">▾</button>
               </th>
-              <th class="col-h" data-col="source">
-                <button class="col-sort" data-col="source">Source <span class="col-arrow"></span></button>
-                <button class="col-filter" data-col="source" data-kind="checklist" title="Filter sources">▾</button>
+              <th class="col-h" data-col="source" scope="col">
+                <button class="col-sort" data-col="source" aria-label="Sort by source">Source <span class="col-arrow" aria-hidden="true"></span></button>
+                <button class="col-filter" data-col="source" data-kind="checklist" aria-label="Filter sources" title="Filter sources">▾</button>
               </th>
             </tr>
           </thead>

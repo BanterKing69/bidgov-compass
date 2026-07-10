@@ -248,11 +248,74 @@ def api_stats():
                 ELSE '3+ months' END AS k,
                 COUNT(*) AS n
             FROM tenders {where} GROUP BY k""")
+        # Basic counts + sum
         totals = conn.execute(
             f"SELECT COUNT(*), SUM(is_open), "
-            f"       ROUND(COALESCE(SUM(value_amount),0)), "
-            f"       ROUND(COALESCE(AVG(value_amount),0)) "
+            f"       ROUND(COALESCE(SUM(value_amount),0)) "
             f"FROM tenders {where}", params).fetchone()
+
+        # Median + P90 — much more informative than the mean for tender values
+        # (heavy-tailed distribution, a handful of £bn frameworks skew the mean).
+        # Computed only over notices with a known value.
+        median_row = conn.execute(f"""
+            WITH ranked AS (
+                SELECT value_amount, ROW_NUMBER() OVER (ORDER BY value_amount) rn,
+                       COUNT(*) OVER () c
+                FROM tenders {where} AND value_amount IS NOT NULL AND value_amount > 0
+            )
+            SELECT ROUND(AVG(value_amount)) FROM ranked
+            WHERE rn IN ((c + 1) / 2, (c + 2) / 2)
+        """ if where else f"""
+            WITH ranked AS (
+                SELECT value_amount, ROW_NUMBER() OVER (ORDER BY value_amount) rn,
+                       COUNT(*) OVER () c
+                FROM tenders WHERE value_amount IS NOT NULL AND value_amount > 0
+            )
+            SELECT ROUND(AVG(value_amount)) FROM ranked
+            WHERE rn IN ((c + 1) / 2, (c + 2) / 2)
+        """, params).fetchone()
+        median_value = median_row[0] if median_row else 0
+
+        # 90th percentile — the "big end" of the sensible range
+        p90_row = conn.execute(f"""
+            WITH ranked AS (
+                SELECT value_amount, ROW_NUMBER() OVER (ORDER BY value_amount) rn,
+                       COUNT(*) OVER () c
+                FROM tenders {where} AND value_amount IS NOT NULL AND value_amount > 0
+            )
+            SELECT ROUND(value_amount) FROM ranked WHERE rn = CAST(0.9 * c AS INTEGER)
+        """ if where else """
+            WITH ranked AS (
+                SELECT value_amount, ROW_NUMBER() OVER (ORDER BY value_amount) rn,
+                       COUNT(*) OVER () c
+                FROM tenders WHERE value_amount IS NOT NULL AND value_amount > 0
+            )
+            SELECT ROUND(value_amount) FROM ranked WHERE rn = CAST(0.9 * c AS INTEGER)
+        """, params).fetchone()
+        p90_value = p90_row[0] if p90_row else 0
+
+        # Sweet-spot count: notices in £50k-£300k with a mapped category
+        sweet_row = conn.execute(
+            f"SELECT COUNT(*) FROM tenders {where} "
+            f"AND value_amount BETWEEN 50000 AND 300000 "
+            f"AND category IS NOT NULL"
+            if where else
+            "SELECT COUNT(*) FROM tenders "
+            "WHERE value_amount BETWEEN 50000 AND 300000 AND category IS NOT NULL",
+            params,
+        ).fetchone()
+        sweet_spot_count = sweet_row[0] if sweet_row else 0
+
+        # Sum of values inside sensible SME range (<= £5M) — meaningful "opportunity value"
+        in_range_row = conn.execute(
+            f"SELECT ROUND(COALESCE(SUM(value_amount),0)) FROM tenders {where} "
+            f"AND value_amount BETWEEN 0 AND 5000000"
+            if where else
+            "SELECT ROUND(COALESCE(SUM(value_amount),0)) FROM tenders "
+            "WHERE value_amount BETWEEN 0 AND 5000000",
+            params,
+        ).fetchone()
+        in_range_total = in_range_row[0] if in_range_row else 0
     finally:
         conn.close()
 
@@ -262,7 +325,11 @@ def api_stats():
     return jsonify({
         "totals": {
             "notices": totals[0], "open": totals[1] or 0,
-            "total_value": totals[2] or 0, "avg_value": totals[3] or 0,
+            "total_value": totals[2] or 0,
+            "median_value": median_value or 0,
+            "p90_value": p90_value or 0,
+            "sweet_spot_count": sweet_spot_count,
+            "in_range_total": in_range_total or 0,
         },
         "by_category": dictify(by_cat, ("k", "n", "total_v")),
         "by_source": dictify(by_source),
