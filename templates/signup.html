@@ -1,6 +1,17 @@
 {% extends "_auth_base.html" %}
 {% block title %}Create account · BidGov Compass{% endblock %}
 {% block content %}
+  {% if signup_disabled %}
+    <h1 class="auth-h1">Invite-only</h1>
+    <p class="auth-lede">
+      BidGov Compass isn't currently accepting new sign-ups. If you've been
+      invited, please use the login link you were sent. Otherwise get in touch
+      via <a href="https://govbid.co.uk">govbid.co.uk</a>.
+    </p>
+    <div class="auth-foot">
+      Have an account? <a href="{{ url_for('auth.login') }}">Sign in</a>
+    </div>
+  {% else %}
   <h1 class="auth-h1">Create an account</h1>
   <p class="auth-lede">Get instant access to UK &amp; EU tender intelligence — normalised, categorised, always live.</p>
 
@@ -26,4 +37,5 @@
   <div class="auth-foot">
     Already a member? <a href="{{ url_for('auth.login') }}">Sign in</a>
   </div>
+  {% endif %}
 {% endblock %}

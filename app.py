@@ -22,10 +22,12 @@ sys.path.insert(0, str(Path(__file__).resolve().parent / "collectors"))
 import db  # noqa: E402
 import chat as chat_mod  # noqa: E402
 import auth  # noqa: E402
+import admin  # noqa: E402
 
 APP_ROOT = Path(__file__).resolve().parent
 app = Flask(__name__, template_folder="templates", static_folder="static")
 auth.init_app(app)
+admin.init_app(app)
 
 # --------------------------------------------------------------------------- #
 # Scrape job state (in-memory; one job at a time)
@@ -656,8 +658,11 @@ def api_pivot():
     return jsonify({"columns": cols, "rows": rows})
 
 
-# --- scrape controls ----------------------------------------------------- #
+# --- scrape controls (admin-only from Phase 3) --------------------------- #
+# The scrape hits third-party APIs and mutates the tenders store; only admins
+# can trigger and observe it. Non-admin GET/POST returns JSON 403.
 @app.route("/api/scrape", methods=["POST"])
+@auth.admin_required
 def api_scrape():
     global _scrape_state
     with _scrape_lock:
@@ -678,12 +683,18 @@ def api_scrape():
 
 
 @app.route("/api/scrape/status")
+@auth.admin_required
 def api_scrape_status():
     return jsonify(_scrape_state)
 
 
-# --- export -------------------------------------------------------------- #
+# --- export (admin-only from Phase 3) ----------------------------------- #
+# Full-store XLSX/CSV export — capable of streaming the entire 9k-row table.
+# Not something a paying client should be able to bulk-download; the admin
+# Data-ops tab exposes it with a scope picker (current filters / open only /
+# awards).
 @app.route("/api/export")
+@auth.admin_required
 def api_export():
     fmt = request.args.get("format", "xlsx")
     stage = request.args.get("stage", "tender")

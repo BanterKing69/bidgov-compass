@@ -1,0 +1,200 @@
+{% extends "_app_base.html" %}
+
+{# Phase 3: Admin console — single page with client-side tabs.
+   Tabs: Overview · Pipeline · Users · Data ops.
+   All content in this template renders ONLY when current_user.is_admin
+   (route is @admin_required). Overview + Pipeline JS lands in Phase 4;
+   Users + Data ops JS is Phase 3. #}
+
+{% block title %}Admin · BidGov Compass{% endblock %}
+
+{% block page_head %}
+  <!-- Chart.js used by Overview economics (Phase 4 populates the bar chart). -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+{% endblock %}
+
+{% block content %}
+
+<header class="page-header">
+  <h1 class="page-header__title">Admin</h1>
+  <div class="page-header__actions">
+    <span class="page-header__meta">Signed in as <strong>{{ user.email }}</strong></span>
+  </div>
+</header>
+
+<div class="admin">
+
+  <div class="tabs" role="tablist" aria-label="Admin sections">
+    <button class="tab tab--active" data-tab="overview" role="tab">Overview</button>
+    <button class="tab"              data-tab="pipeline" role="tab">Pipeline</button>
+    <button class="tab"              data-tab="users"    role="tab">Users</button>
+    <button class="tab"              data-tab="dataops"  role="tab">Data ops</button>
+  </div>
+
+  {# =================== OVERVIEW — fee economics (Phase 4 wires) ============ #}
+  <section id="tab-overview" class="tab-panel is-active">
+    <div class="kpis admin-kpis" role="region" aria-label="Fee economics">
+      <div class="kpi">
+        <div class="kpi__label">Revenue booked</div>
+        <div id="admKpiRevenue" class="kpi__value">–</div>
+        <div class="kpi__delta muted">Σ upfront + success fees on won deals</div>
+      </div>
+      <div class="kpi">
+        <div class="kpi__label">Success-fee pipeline (unweighted)</div>
+        <div id="admKpiPipeline" class="kpi__value">–</div>
+        <div class="kpi__delta muted">5% × value across all open tracked deals</div>
+      </div>
+      <div class="kpi kpi--accent">
+        <div class="kpi__label">Expected £ / deal</div>
+        <div id="admKpiExpected" class="kpi__value">–</div>
+        <div class="kpi__delta muted">1500 + 5% × value × category win-rate</div>
+      </div>
+      <div class="kpi">
+        <div class="kpi__label">Tracked deals</div>
+        <div id="admKpiCount" class="kpi__value">–</div>
+        <div class="kpi__delta muted">All stages</div>
+      </div>
+    </div>
+
+    <div class="admin-grid">
+      <section class="panel">
+        <div class="panel__head">
+          <div class="panel__title">Funnel by stage</div>
+        </div>
+        <div id="admFunnel" class="funnel">
+          <div class="muted" style="padding:12px 8px">Loading…</div>
+        </div>
+      </section>
+
+      <section class="panel">
+        <div class="panel__head">
+          <div class="panel__title">Fees by category</div>
+        </div>
+        <div class="chart-wrap chart-wrap--sm">
+          <canvas id="admChartFees"></canvas>
+        </div>
+      </section>
+    </div>
+  </section>
+
+  {# =================== PIPELINE — deal-tracking table (Phase 4 wires) ====== #}
+  <section id="tab-pipeline" class="tab-panel panel">
+    <div class="panel__head">
+      <div class="panel__title">Pipeline</div>
+      <div class="panel__meta">Deals you're actively tracking. Fee = £1,500 upfront + 5% on win.</div>
+    </div>
+
+    <div class="pipeline-toolbar">
+      <input id="pipeAddQ" class="field" type="search" placeholder="Add: search title or paste tender UID…" />
+      <button id="pipeExport" class="btn btn--secondary btn--sm" type="button">Export CSV</button>
+    </div>
+    <div id="pipeAddResults" class="pipe-add-results" hidden></div>
+
+    <div class="tbl-wrap">
+      <table class="tenders pipeline-tbl">
+        <thead>
+          <tr>
+            <th scope="col">Title</th>
+            <th scope="col">Buyer</th>
+            <th scope="col">Client</th>
+            <th scope="col">Stage</th>
+            <th scope="col" class="num">Value</th>
+            <th scope="col" class="num">Fees</th>
+            <th scope="col">Updated</th>
+            <th scope="col" aria-label="Actions"></th>
+          </tr>
+        </thead>
+        <tbody id="pipeBody"><tr><td colspan="8" class="center muted">Loading…</td></tr></tbody>
+      </table>
+    </div>
+    <div class="panel__meta" id="pipeFoot" style="margin-top:10px;"></div>
+  </section>
+
+  {# =================== USERS — account management ========================= #}
+  <section id="tab-users" class="tab-panel panel">
+    <div class="panel__head">
+      <div class="panel__title">Users</div>
+      <div class="panel__meta">
+        Open signup: <strong id="usersSignupState">–</strong>
+        <span class="muted"> · toggle via <code>ALLOW_SIGNUP</code> env var</span>
+      </div>
+    </div>
+    <div class="tbl-wrap">
+      <table class="tenders users-tbl">
+        <thead>
+          <tr>
+            <th scope="col">Email</th>
+            <th scope="col">Name</th>
+            <th scope="col">Admin</th>
+            <th scope="col">Active</th>
+            <th scope="col">Created</th>
+            <th scope="col">Last login</th>
+            <th scope="col" aria-label="Actions"></th>
+          </tr>
+        </thead>
+        <tbody id="usersBody"><tr><td colspan="7" class="center muted">Loading…</td></tr></tbody>
+      </table>
+    </div>
+  </section>
+
+  {# =================== DATA OPS — relocated scrape modal + export ========= #}
+  <section id="tab-dataops" class="tab-panel">
+    <div class="admin-grid">
+
+      <section class="panel">
+        <div class="panel__head">
+          <div class="panel__title">Scrape</div>
+          <div class="panel__meta">Pull fresh notices from the open-data APIs. Runs in the background.</div>
+        </div>
+        <div class="dataops-row">
+          <label>Days back
+            <input id="scrapeDays" class="field" type="number" min="1" max="365" value="30" />
+          </label>
+          <label>Max pages / source
+            <input id="scrapeMax"  class="field" type="number" min="1" max="200" value="25" />
+          </label>
+          <button id="scrapeStart" class="btn btn--primary">Start scrape</button>
+        </div>
+        <div id="scrapeStatusLine" class="pivot-hint" style="margin-top:12px">
+          <span id="scrapeDot" class="status-dot"></span>
+          <span id="scrapeStatus">Idle.</span>
+        </div>
+        <div id="scrapeLog" class="scrape-log hidden"></div>
+      </section>
+
+      <section class="panel">
+        <div class="panel__head">
+          <div class="panel__title">Export</div>
+          <div class="panel__meta">XLSX or CSV of the entire tenders store, scoped as you choose.</div>
+        </div>
+        <div class="dataops-row">
+          <label>Scope
+            <select id="exportScope" class="field">
+              <option value="live" selected>Live tenders only (deadline ≥ now)</option>
+              <option value="all-tenders">All tenders (open + closed)</option>
+              <option value="awards">Awards (won contracts)</option>
+            </select>
+          </label>
+          <label>Format
+            <select id="exportFormat" class="field">
+              <option value="xlsx" selected>Excel (.xlsx)</option>
+              <option value="csv">CSV</option>
+            </select>
+          </label>
+          <button id="exportGo" class="btn btn--primary">Download</button>
+        </div>
+        <div class="panel__meta" style="margin-top:10px">
+          Streams the full result set — can be several MB.
+        </div>
+      </section>
+
+    </div>
+  </section>
+
+</div>
+
+{% endblock %}
+
+{% block page_js %}
+<script type="module" src="{{ url_for('static', filename='js/admin.js') }}"></script>
+{% endblock %}

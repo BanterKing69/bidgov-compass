@@ -22,7 +22,9 @@
     <button type="submit" class="auth-submit">Sign in</button>
   </form>
 
+  {% if signup_allowed() %}
   <div class="auth-foot">
     New here? <a href="{{ url_for('auth.signup') }}">Create an account</a>
   </div>
+  {% endif %}
 {% endblock %}

@@ -6,3 +6,7 @@ flask-login>=0.6  # portal member sessions
 gunicorn>=21.2    # production WSGI server (Render / Fly / Heroku)
 anthropic>=0.30   # optional: chat NL->SQL via Claude if ANTHROPIC_API_KEY set
 # Firecrawl is OPTIONAL and used via REST (no package needed).
+
+# Dev / test — kept here for one-command install; the app itself never
+# imports these, so they cost nothing at runtime.
+pytest>=8.0       # portal access-matrix + pipeline/CSRF tests (Phases 3–6)
