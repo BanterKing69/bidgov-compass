@@ -222,7 +222,9 @@ def login():
         # only allow same-site next redirects
         if next_url and not next_url.startswith("/"):
             next_url = None
-        return redirect(next_url or url_for("home"))
+        # Post-login default lands on /live-bids (the client hero screen —
+        # highest signal per screen). Explicit `?next=` still honoured.
+        return redirect(next_url or url_for("live_bids"))
     return render_template("login.html", email="")
 
 

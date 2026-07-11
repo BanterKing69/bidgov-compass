@@ -101,7 +101,24 @@ def _require_login():
 # --------------------------------------------------------------------------- #
 @app.route("/")
 def home():
+    # / is the Search screen (full explorer). Endpoint name preserved so the
+    # existing url_for('home') references (auth redirects, templates) keep
+    # resolving.
     return render_template("dashboard.html", user=current_user)
+
+
+@app.route("/live-bids")
+def live_bids():
+    # Live bids page — client-facing, urgency-forward view of open tenders.
+    # Server-side locks deadline >= now on every /api/live-tenders call;
+    # this page just renders the shell.
+    return render_template("live_bids.html", user=current_user)
+
+
+@app.route("/dashboard")
+def dashboard_page():
+    # Dashboard page — KPI row + the five Chart.js charts, moved off /.
+    return render_template("dashboard_page.html", user=current_user)
 
 
 # --- filters + table ----------------------------------------------------- #
@@ -241,6 +258,72 @@ def api_tenders():
     finally:
         conn.close()
     return jsonify({"total": total, "returned": len(rows), "rows": rows})
+
+
+# --------------------------------------------------------------------------- #
+# Live-bids API — same table + columns as /api/tenders, but with a hardcoded
+# server-side "deadline >= now" clause the client cannot remove. is_open is
+# set at collection time and goes stale (verified: DB has ~5 rows where
+# is_open=1 but deadline has already passed), so we compare deadline to
+# datetime('now') at query time. SQLite compares ISO 8601 strings lexically
+# — safe for the well-formed ISO deadlines our normaliser produces.
+# --------------------------------------------------------------------------- #
+def _build_live_where(args):
+    """Same as _build_where(stage='tender') but always AND'd with
+    `deadline IS NOT NULL AND deadline >= datetime('now')`. Returns (where, params).
+    """
+    where, params = _build_where(args)
+    # _build_where always emits WHERE ... for stage='tender' (at least the
+    # notice_stage clause is present), so we can safely append with AND.
+    where = where + " AND deadline IS NOT NULL AND deadline >= datetime('now')"
+    return where, params
+
+
+@app.route("/api/live-tenders")
+def api_live_tenders():
+    where, params = _build_live_where(request.args)
+    sort = _ALLOWED_SORT.get(request.args.get("sort", "deadline"),
+                             _ALLOWED_SORT["deadline"])
+    limit = min(int(request.args.get("limit", 500)), 5000)
+    cols = ("uid,source,title,category,cpv_code,buyer_name,buyer_region,"
+            "value_amount,value_currency,published_date,deadline,status,"
+            "is_open,notice_url")
+    conn = db.connect()
+    try:
+        cur = conn.execute(
+            f"SELECT {cols} FROM tenders {where} ORDER BY {sort} LIMIT ?",
+            [*params, limit],
+        )
+        col_names = [d[0] for d in cur.description]
+        rows = [dict(zip(col_names, r)) for r in cur.fetchall()]
+        total_cur = conn.execute(f"SELECT COUNT(*) FROM tenders {where}", params)
+        total = total_cur.fetchone()[0]
+    finally:
+        conn.close()
+    return jsonify({"total": total, "returned": len(rows), "rows": rows})
+
+
+@app.route("/api/live-stats")
+def api_live_stats():
+    """KPI-strip payload for the Live bids page: open count, total open value,
+    closing ≤7d count. Honours the same filter params /api/live-tenders accepts."""
+    where, params = _build_live_where(request.args)
+    conn = db.connect()
+    try:
+        row = conn.execute(
+            f"SELECT COUNT(*), "
+            f"       ROUND(COALESCE(SUM(value_amount), 0)), "
+            f"       SUM(CASE WHEN deadline <= datetime('now', '+7 days') THEN 1 ELSE 0 END) "
+            f"FROM tenders {where}",
+            params,
+        ).fetchone()
+    finally:
+        conn.close()
+    return jsonify({
+        "open_count":       row[0] or 0,
+        "total_open_value": row[1] or 0,
+        "closing_7d":       row[2] or 0,
+    })
 
 
 # --------------------------------------------------------------------------- #
@@ -453,10 +536,18 @@ def api_stats():
                 ELSE '3+ months' END AS k,
                 COUNT(*) AS n
             FROM tenders {where} GROUP BY k""")
-        # Basic counts + sum
+        # Basic counts + sum + closing-≤7d count (added Phase 2 for /dashboard KPI).
+        # `open` uses is_open (heuristic, cheap) — accurate enough for the
+        # summary KPI; the definitive "live" count lives at /api/live-stats.
+        # `closing_7d` also compares deadline to now, catching stale rows
+        # where is_open=1 but the deadline has passed.
         totals = conn.execute(
             f"SELECT COUNT(*), SUM(is_open), "
-            f"       ROUND(COALESCE(SUM(value_amount),0)) "
+            f"       ROUND(COALESCE(SUM(value_amount),0)), "
+            f"       SUM(CASE WHEN deadline IS NOT NULL "
+            f"                 AND deadline >= datetime('now') "
+            f"                 AND deadline <= datetime('now', '+7 days') "
+            f"           THEN 1 ELSE 0 END) "
             f"FROM tenders {where}", params).fetchone()
 
         # Median + P90 — much more informative than the mean for tender values
@@ -531,6 +622,7 @@ def api_stats():
         "totals": {
             "notices": totals[0], "open": totals[1] or 0,
             "total_value": totals[2] or 0,
+            "closing_7d": totals[3] or 0,     # Phase 2 addition (Dashboard KPI)
             "median_value": median_value or 0,
             "p90_value": p90_value or 0,
             "sweet_spot_count": sweet_spot_count,
