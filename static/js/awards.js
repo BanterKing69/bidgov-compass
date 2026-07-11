@@ -273,15 +273,23 @@
       else { $('#fltAwMin').value=''; $('#fltAwMax').value=''; }
       refresh();
     });
-    // Exports — reuse existing /api/export by injecting stage=award via a helper endpoint
-    $('#exportXlsx').addEventListener('click', () => {
-      const p = buildQuery(); p.set('format','xlsx'); p.set('stage','award');
-      location = '/api/export?' + p.toString();
-    });
-    $('#exportCsv').addEventListener('click', () => {
-      const p = buildQuery(); p.set('format','csv'); p.set('stage','award');
-      location = '/api/export?' + p.toString();
-    });
+    // Export buttons removed from awards.html in Phase 2 — /api/export moves
+    // behind admin in Phase 3 and gains a scope picker inside Data ops. If
+    // any page still exposes these ids, wire them; otherwise no-op.
+    const xlsxBtn = document.getElementById('exportXlsx');
+    if (xlsxBtn) {
+      xlsxBtn.addEventListener('click', () => {
+        const p = buildQuery(); p.set('format','xlsx'); p.set('stage','award');
+        location = '/api/export?' + p.toString();
+      });
+    }
+    const csvBtn = document.getElementById('exportCsv');
+    if (csvBtn) {
+      csvBtn.addEventListener('click', () => {
+        const p = buildQuery(); p.set('format','csv'); p.set('stage','award');
+        location = '/api/export?' + p.toString();
+      });
+    }
   }
 
   async function boot(){

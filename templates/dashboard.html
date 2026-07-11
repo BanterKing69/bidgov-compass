@@ -1,18 +1,17 @@
 {% extends "_app_base.html" %}
 
-{# Phase 1: dashboard.html re-skins into the shared app shell.
-   The topbar/topnav has moved to the rail (in _app_base.html).
-   Element IDs and script wiring are preserved so dashboard.js works untouched.
-   Phase 2 will split the KPI/charts rows out to /dashboard, the Scrape/Export
-   buttons out to /admin Data ops, and reframe this page as "Search". #}
+{# Phase 2: / is now the Search screen. Endpoint name still `home` to keep
+   url_for('home') references intact. This template retains the sidebar filter
+   set + Table/Pivot/Chat tabs and the column-popover UI on the table headers.
+   Moved out to their new homes:
+     * KPI row + 5 Chart.js charts    -> /dashboard (templates/dashboard_page.html)
+     * Scrape/Export toolbar + modal  -> Phase 3 admin Data-ops tab #}
 
-{% block title %}BidGov Compass — UK Tender Intelligence{% endblock %}
+{% block title %}Search · BidGov Compass{% endblock %}
 
 {% block page_head %}
-  <!-- Chart.js -->
-  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
-
-  <!-- jQuery + PivotTable.js (required by PivotTable.js) -->
+  {# jQuery + PivotTable.js — still needed for the Pivot tab.
+     Chart.js dropped: no charts on Search anymore. #}
   <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/jquery-ui@1.13.2/dist/jquery-ui.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/pivottable@2.23.0/dist/pivot.min.js"></script>
@@ -21,21 +20,16 @@
 
 {% block content %}
 
-<!-- ============================== PAGE HEADER ============================== -->
 <header class="page-header">
-  <h1 class="page-header__title"><span class="accent">Bid</span>Gov Compass</h1>
+  <h1 class="page-header__title">Search</h1>
   <div class="page-header__actions">
     <span id="lastUpdated" class="page-header__meta"></span>
-    <button id="scrapeBtn"  class="btn btn--primary">Scrape now</button>
-    <button id="exportXlsx" class="btn btn--ghost">Export Excel</button>
-    <button id="exportCsv"  class="btn btn--ghost">CSV</button>
   </div>
 </header>
 
-<!-- ============================== LAYOUT =================================== -->
 <div class="layout">
 
-  <!-- =========================== SIDEBAR ================================= -->
+  {# =========================== SIDEBAR ================================= #}
   <aside class="sidebar">
     <h3 style="margin-bottom:14px;">Filters</h3>
 
@@ -92,58 +86,16 @@
     </div>
   </aside>
 
-  <!-- ============================ MAIN =============================== -->
+  {# ============================ MAIN =============================== #}
   <main class="main">
 
-    <!-- KPI ROW -->
-    <div class="kpis" role="region" aria-label="Summary metrics">
-      <div class="kpi">
-        <div class="kpi__label">Matching</div>
-        <div id="kpiTotal" class="kpi__value">–</div>
-        <div class="kpi__delta muted">applies to all views</div>
-      </div>
-      <div class="kpi kpi--accent">
-        <div class="kpi__label">Open / live</div>
-        <div id="kpiOpen" class="kpi__value">–</div>
-        <div class="kpi__delta muted">deadline in the future</div>
-      </div>
-      <div class="kpi">
-        <div class="kpi__label">Median value</div>
-        <div id="kpiValue" class="kpi__value">–</div>
-        <div class="kpi__delta muted">robust to outliers</div>
-      </div>
-      <div class="kpi">
-        <div class="kpi__label">Sweet-spot count</div>
-        <div id="kpiAvg" class="kpi__value">–</div>
-        <div class="kpi__delta muted">£50k–£300k, categorised</div>
-      </div>
-    </div>
-
-    <!-- CHARTS -->
-    <section class="panel">
-      <div class="panel__head">
-        <div class="panel__title">Overview</div>
-        <div class="panel__meta">Charts update with the filters →</div>
-      </div>
-      <div class="charts">
-        <div class="chart-wrap"><canvas id="chartCategory"></canvas></div>
-        <div class="chart-wrap"><canvas id="chartSource"></canvas></div>
-        <div class="chart-wrap"><canvas id="chartBands"></canvas></div>
-      </div>
-      <div class="charts" style="margin-top:14px;">
-        <div class="chart-wrap"><canvas id="chartDeadline"></canvas></div>
-        <div class="chart-wrap" style="grid-column: span 2"><canvas id="chartTopCat"></canvas></div>
-      </div>
-    </section>
-
-    <!-- TABS -->
     <div class="tabs" role="tablist">
       <button class="tab tab--active" data-tab="table">Table</button>
       <button class="tab"              data-tab="pivot">Pivot</button>
       <button class="tab"              data-tab="chat">Ask the data</button>
     </div>
 
-    <!-- TABLE -->
+    {# ---- Table tab ---- #}
     <section id="tab-table" class="tab-panel is-active panel">
       <div class="panel__head">
         <div class="panel__title">Matching tenders</div>
@@ -189,7 +141,7 @@
           <tbody id="tblBody"><tr><td colspan="6" class="center muted">Loading…</td></tr></tbody>
         </table>
 
-        <!-- Column filter popover (positioned + populated by JS) -->
+        {# Column filter popover (positioned + populated by filters.js) #}
         <div id="colPop" class="col-pop" hidden>
           <div class="col-pop__title"></div>
           <div class="col-pop__body"></div>
@@ -202,7 +154,7 @@
       <div class="panel__meta" id="tblFoot" style="margin-top:10px;"></div>
     </section>
 
-    <!-- PIVOT -->
+    {# ---- Pivot tab ---- #}
     <section id="tab-pivot" class="tab-panel panel">
       <div class="panel__head">
         <div class="panel__title">Pivot table</div>
@@ -215,7 +167,7 @@
       <div id="pivotOut"></div>
     </section>
 
-    <!-- CHAT -->
+    {# ---- Chat tab ---- #}
     <section id="tab-chat" class="tab-panel">
       <div class="chat">
         <div id="chatLog" class="chat__log">
@@ -245,33 +197,8 @@
   </main>
 </div>
 
-<!-- ============================ SCRAPE MODAL ============================ -->
-<div id="scrapeModal" class="modal-backdrop">
-  <div class="modal">
-    <h2>Run scrape</h2>
-    <p>Pull fresh notices from the government open-data APIs. Runs in the background — you can keep browsing.</p>
-    <div class="row">
-      <label>Days back
-        <input id="scrapeDays" class="field" type="number" min="1" max="365" value="30" />
-      </label>
-      <label>Max pages / source
-        <input id="scrapeMax"  class="field" type="number" min="1" max="200" value="25" />
-      </label>
-    </div>
-    <div id="scrapeStatusLine" class="pivot-hint">
-      <span id="scrapeDot" class="status-dot"></span>
-      <span id="scrapeStatus">Idle.</span>
-    </div>
-    <div id="scrapeLog" class="scrape-log hidden"></div>
-    <div class="modal__actions">
-      <button id="scrapeClose" class="btn btn--secondary">Close</button>
-      <button id="scrapeStart" class="btn btn--primary">Start scrape</button>
-    </div>
-  </div>
-</div>
-
 {% endblock %}
 
 {% block page_js %}
-<script src="{{ url_for('static', filename='js/dashboard.js') }}"></script>
+<script type="module" src="{{ url_for('static', filename='js/search.js') }}"></script>
 {% endblock %}
