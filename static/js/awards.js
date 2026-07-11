@@ -224,8 +224,8 @@
       ? `<div class="deadline"><span class="deadline__abs">${fmtDate(t.awarded_date)}</span><span class="deadline__rel">${escapeHtml(fmtRel(t.awarded_date))}</span></div>`
       : `<span class="muted">–</span>`;
     const endDate = t.contract_end_date;
-    const daysToEnd = daysToEnd_ = daysUntil(endDate);
-    const endCls = daysToEnd_ != null && daysToEnd_ >= 0 && daysToEnd_ <= 180 ? 'is-soon' : '';
+    const daysToEnd = daysUntil(endDate);
+    const endCls = daysToEnd != null && daysToEnd >= 0 && daysToEnd <= 180 ? 'is-soon' : '';
     const endsCell = endDate
       ? `<div class="deadline ${endCls}"><span class="deadline__abs">${fmtDate(endDate)}</span><span class="deadline__rel">${escapeHtml(fmtRel(endDate))}</span></div>`
       : `<span class="muted">–</span>`;
