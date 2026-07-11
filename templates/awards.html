@@ -1,41 +1,25 @@
-<!doctype html>
-<html lang="en">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Won Contracts · BidGov Compass</title>
-  <link rel="icon" href="{{ url_for('static', filename='img/logo.jpeg') }}" />
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Poppins:wght@600;700&display=swap" rel="stylesheet">
-  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
-  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}" />
-</head>
-<body>
+{% extends "_app_base.html" %}
 
-<!-- TOP BAR -->
-<header class="topbar">
-  <div class="topbar__brand">
-    <img class="topbar__logo" src="{{ url_for('static', filename='img/logo.jpeg') }}" alt="GovBid logo" />
-    <div>
-      <div class="topbar__title"><span class="accent">Bid</span>Gov Compass<span class="topbar__sub">Tender Intelligence</span></div>
-    </div>
-  </div>
-  <nav class="topnav" aria-label="Primary">
-    <a class="topnav__link" href="{{ url_for('home') }}">Opportunities</a>
-    <a class="topnav__link is-active" href="{{ url_for('awards_page') }}">Won Contracts</a>
-  </nav>
-  <div class="topbar__actions">
-    <span id="lastUpdated" class="topbar__meta"></span>
+{# Phase 1: awards.html re-skins into the shared app shell.
+   The topbar/topnav has moved to the rail (in _app_base.html).
+   Element IDs and script wiring preserved so awards.js works untouched. #}
+
+{% block title %}Won Contracts · BidGov Compass{% endblock %}
+
+{% block page_head %}
+  <!-- Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+{% endblock %}
+
+{% block content %}
+
+<!-- ============================== PAGE HEADER ============================== -->
+<header class="page-header">
+  <h1 class="page-header__title">Won Contracts</h1>
+  <div class="page-header__actions">
+    <span id="lastUpdated" class="page-header__meta"></span>
     <button id="exportXlsx" class="btn btn--ghost">Export Excel</button>
     <button id="exportCsv"  class="btn btn--ghost">CSV</button>
-    {% if user and user.is_authenticated %}
-    <div class="topbar__user">
-      <span class="email" title="{{ user.email }}">{{ user.name or user.email }}</span>
-      <a href="{{ url_for('auth.account') }}">Account</a>
-      <a href="{{ url_for('auth.logout') }}">Sign out</a>
-    </div>
-    {% endif %}
   </div>
 </header>
 
@@ -177,6 +161,8 @@
   </main>
 </div>
 
+{% endblock %}
+
+{% block page_js %}
 <script src="{{ url_for('static', filename='js/awards.js') }}"></script>
-</body>
-</html>
+{% endblock %}

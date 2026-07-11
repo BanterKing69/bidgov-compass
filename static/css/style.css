@@ -660,3 +660,182 @@ table.tenders thead th.num .col-sort { padding-left: 6px; }
   .layout { grid-template-columns: 1fr; }
   .sidebar { border-right: none; border-bottom: 1px solid var(--line); }
 }
+
+
+/* =========================================================================
+   App shell (Phase 1) — icon rail + mobile bottom nav
+   All classes new, only existing tokens used (var(--gov) etc.).
+   Body opts in with class="app-shell"; auth pages skip it.
+   ========================================================================= */
+
+body.app-shell {
+  display: grid;
+  grid-template-columns: 72px 1fr;
+  min-height: 100vh;
+}
+
+/* --- rail (desktop ≥768px) ---------------------------------------------- */
+.rail {
+  position: sticky; top: 0;
+  align-self: start;
+  height: 100vh;
+  width: 72px;
+  background: var(--card);
+  border-right: 1px solid var(--line);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: var(--space-md) 0;
+  gap: var(--space-sm);
+  z-index: 40;
+}
+.rail__logo {
+  display: flex; align-items: center; justify-content: center;
+  width: 40px; height: 40px;
+  border-radius: var(--radius);
+  overflow: hidden;
+  margin-bottom: var(--space-sm);
+}
+.rail__logo img { width: 100%; height: 100%; object-fit: cover; display: block; }
+
+.rail__item {
+  width: 44px; height: 44px;
+  display: flex; align-items: center; justify-content: center;
+  border-radius: var(--radius);
+  color: var(--gov);
+  text-decoration: none;
+  transition: background var(--dur-fast) var(--ease),
+              color      var(--dur-fast) var(--ease);
+}
+.rail__item:hover { background: var(--bg); color: var(--gov-strong); text-decoration: none; }
+.rail__item:focus-visible { outline: 2px solid var(--bid); outline-offset: 2px; }
+.rail__item.is-active {
+  background: var(--gov-strong);
+  color: var(--bid);
+}
+.rail__item svg {
+  width: 22px; height: 22px;
+  stroke-width: 1.75;
+  display: block;
+}
+
+.rail__spacer { flex: 1; }
+
+.rail__foot {
+  width: 44px; height: 44px;
+  display: flex; align-items: center; justify-content: center;
+  border-radius: var(--radius);
+  color: var(--muted);
+  text-decoration: none;
+  transition: background var(--dur-fast) var(--ease),
+              color      var(--dur-fast) var(--ease);
+}
+.rail__foot:hover { background: var(--bg); color: var(--gov); text-decoration: none; }
+.rail__foot:focus-visible { outline: 2px solid var(--bid); outline-offset: 2px; }
+.rail__foot svg { width: 20px; height: 20px; stroke-width: 1.75; }
+
+/* --- shell main column -------------------------------------------------- */
+.shell-main {
+  min-width: 0;             /* let grid children shrink so tables can scroll */
+  display: flex;
+  flex-direction: column;
+}
+
+/* --- flash messages (surface on any shell page) -------------------------- */
+.flashes {
+  display: flex; flex-direction: column; gap: var(--space-sm);
+  padding: var(--space-md) var(--space-lg) 0;
+}
+.flash {
+  padding: 10px 14px;
+  border-radius: var(--radius-sm);
+  font-size: 14px;
+  background: var(--card);
+  border: 1px solid var(--line);
+  color: var(--gov);
+}
+.flash--error {
+  background: var(--bid-tint);
+  border-color: var(--bid);
+  color: var(--bid-hover);
+}
+.flash--success {
+  background: #EEF6F0;
+  border-color: var(--success);
+  color: var(--success);
+}
+
+/* --- bottom nav (mobile <768px) ----------------------------------------- */
+.bottomnav {
+  display: none;
+  position: fixed; left: 0; right: 0; bottom: 0;
+  height: 60px;
+  background: var(--card);
+  border-top: 1px solid var(--line);
+  padding: 0 var(--space-sm);
+  justify-content: space-around;
+  align-items: center;
+  z-index: 40;
+  box-shadow: 0 -1px 3px rgba(84, 86, 91, .05);
+}
+.bottomnav__item {
+  min-width: 44px; height: 44px;                /* ≥44px touch target */
+  display: flex; align-items: center; justify-content: center;
+  color: var(--gov);
+  text-decoration: none;
+  border-radius: var(--radius);
+  transition: color var(--dur-fast) var(--ease);
+}
+.bottomnav__item.is-active { color: var(--bid); }
+.bottomnav__item:focus-visible { outline: 2px solid var(--bid); outline-offset: 2px; }
+.bottomnav__item svg { width: 24px; height: 24px; stroke-width: 1.75; display: block; }
+
+/* --- responsive switch --------------------------------------------------- */
+@media (max-width: 767px) {
+  body.app-shell {
+    grid-template-columns: 1fr;
+    padding-bottom: 60px;                        /* clear the bottom nav */
+  }
+  .rail { display: none; }
+  .bottomnav { display: flex; }
+}
+
+
+/* =========================================================================
+   Page header — used inside the shell content column (Phase 1)
+   Replaces the deleted per-page .topbar; hosts page title + right actions
+   (e.g. lastUpdated, Scrape / Export buttons on / and /awards until Phase 3).
+   ========================================================================= */
+
+.page-header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+  padding: var(--space-md) var(--space-lg);
+  background: var(--card);
+  border-bottom: 1px solid var(--line);
+}
+.page-header__title {
+  margin: 0;
+  font-family: var(--f-head);
+  font-weight: 600;
+  font-size: 20px;
+  color: var(--gov-strong);
+  letter-spacing: -0.01em;
+}
+.page-header__title .accent { color: var(--bid); }
+.page-header__actions {
+  margin-left: auto;
+  display: flex; gap: 10px; align-items: center;
+  flex-wrap: wrap;
+}
+.page-header__meta {
+  color: var(--muted);
+  font-size: 12px;
+  margin-right: 6px;
+}
+@media (max-width: 767px) {
+  .page-header { padding: var(--space-sm) var(--space-md); }
+  .page-header__title { font-size: 16px; }
+}
+
