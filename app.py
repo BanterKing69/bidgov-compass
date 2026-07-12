@@ -560,19 +560,30 @@ def api_stats():
                 ELSE '3+ months' END AS k,
                 COUNT(*) AS n
             FROM tenders {where} GROUP BY k""")
-        # Basic counts + sum + closing-≤7d count (added Phase 2 for /dashboard KPI).
-        # `open` uses is_open (heuristic, cheap) — accurate enough for the
-        # summary KPI; the definitive "live" count lives at /api/live-stats.
-        # `closing_7d` also compares deadline to now, catching stale rows
-        # where is_open=1 but the deadline has passed.
+        # Basic counts + sum. `open` uses is_open (heuristic, cheap) — accurate
+        # enough for the summary KPI; the definitive "live" count lives at
+        # /api/live-stats.
         totals = conn.execute(
             f"SELECT COUNT(*), SUM(is_open), "
-            f"       ROUND(COALESCE(SUM(value_amount),0)), "
-            f"       SUM(CASE WHEN deadline IS NOT NULL "
-            f"                 AND deadline >= datetime('now') "
-            f"                 AND deadline <= datetime('now', '+7 days') "
-            f"           THEN 1 ELSE 0 END) "
+            f"       ROUND(COALESCE(SUM(value_amount),0)) "
             f"FROM tenders {where}", params).fetchone()
+
+        # closing_7d — run as a SEPARATE, independent query so it uses the
+        # authoritative `notice_stage='tender' AND deadline >= now` semantics
+        # (same as /api/live-tenders + /api/live-stats). If we left this
+        # inside the outer WHERE, it would inherit the default is_open=1
+        # scope and drop rows where is_open=1 but the deadline has passed
+        # (the exact stale-row bug _build_live_where guards against).
+        # This keeps the Dashboard "Closing ≤ 7 days" KPI equal to the
+        # Live-bids KPI for the same phrase — one truth, one number.
+        closing_7d_row = conn.execute(
+            "SELECT COUNT(*) FROM tenders "
+            "WHERE notice_stage='tender' "
+            "  AND deadline IS NOT NULL "
+            "  AND deadline >= datetime('now') "
+            "  AND deadline <= datetime('now', '+7 days')"
+        ).fetchone()
+        closing_7d = closing_7d_row[0] or 0
 
         # Median + P90 — much more informative than the mean for tender values
         # (heavy-tailed distribution, a handful of £bn frameworks skew the mean).
@@ -646,7 +657,7 @@ def api_stats():
         "totals": {
             "notices": totals[0], "open": totals[1] or 0,
             "total_value": totals[2] or 0,
-            "closing_7d": totals[3] or 0,     # Phase 2 addition (Dashboard KPI)
+            "closing_7d": closing_7d,         # Independent of outer WHERE — matches /api/live-stats
             "median_value": median_value or 0,
             "p90_value": p90_value or 0,
             "sweet_spot_count": sweet_spot_count,
