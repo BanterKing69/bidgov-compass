@@ -254,7 +254,7 @@ async function refreshPipeline() {
     tbody.innerHTML = `<tr><td colspan="8">
       <div class="empty">
         <div class="empty__title">No tracked deals yet</div>
-        <div class="empty__body">Use the search box above or the <strong>Track</strong> action on any tender row (Search / Live bids) to add one.</div>
+        <div class="empty__body">Use the search box above or the <strong>Save deal</strong> bookmark (🔖) on any tender row (Search / Live bids) to add one.</div>
       </div>
     </td></tr>`;
   } else {
@@ -319,7 +319,7 @@ async function pipeSearch(q) {
           · ${t.value_amount != null ? fmtGBP(t.value_amount) : 'value –'}
         </div>
       </div>
-      <button class="btn btn--primary btn--sm" data-pipe-add="1">+ Track</button>
+      <button class="btn btn--primary btn--sm" data-pipe-add="1">Save deal</button>
     </div>`).join('');
 }
 
@@ -336,12 +336,11 @@ function wirePipeline() {
     if (!btn) return;
     const row = btn.closest('[data-tender-uid]');
     const uid = row.dataset.tenderUid;
-    const clientName = prompt('Client name for this deal?');
-    if (!clientName) return;
     btn.disabled = true;
     try {
+      // Saves with an empty client_name; user fills it in inline in the row below.
       const r = await api('/api/admin/pipeline', {
-        json: { tender_uid: uid, client_name: clientName },
+        json: { tender_uid: uid, client_name: '' },
       });
       if (r && r.ok) {
         $('#pipeAddResults').hidden = true;

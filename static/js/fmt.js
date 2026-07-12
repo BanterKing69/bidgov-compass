@@ -5,11 +5,32 @@
    ----------------------------------------------------------------------- */
 
 // ---- Brand palette (mirrors style.css tokens) --------------------------
+// `ramp` is a 15-slot qualitative palette used by categorical charts
+// (pie/doughnut). Ordered so slot 0 = brand red (accent for the largest
+// slice), colours after 1 are picked from an Okabe-Ito-inspired set for
+// colour-blind separability, and brand tokens are interleaved so the whole
+// thing still reads as GovBid. `ramp[14]` is warm grey — reserved as the
+// "Other" bucket colour by convention (see chart renderers).
 export const C = {
   gov: '#54565B', bid: '#E03C31', bidHover: '#C22F26',
   soft: '#8A8D91', line: '#E7E6E3',
-  ramp: ['#E03C31', '#54565B', '#8A8D91', '#B7791F', '#2E7D5B',
-         '#7A6ED8', '#C22F26', '#3D3F44', '#B0AFAB', '#D57742']
+  ramp: [
+    '#E03C31',  // 0  brand red (Bid)
+    '#0072B2',  // 1  deep blue
+    '#009E73',  // 2  teal-green
+    '#E69F00',  // 3  amber
+    '#8064A2',  // 4  purple
+    '#4BACC6',  // 5  aqua
+    '#D55E00',  // 6  vermillion
+    '#7A6ED8',  // 7  periwinkle
+    '#9BBB59',  // 8  olive
+    '#B7791F',  // 9  brown-amber
+    '#CC79A7',  // 10 reddish purple
+    '#5B9BD5',  // 11 sky blue
+    '#2E7D5B',  // 12 brand success green
+    '#54565B',  // 13 brand charcoal (Gov)
+    '#B0AFAB',  // 14 warm grey — used for "Other" bucket
+  ],
 };
 
 // ---- DOM helpers -------------------------------------------------------

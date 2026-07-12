@@ -1069,87 +1069,329 @@ body.app-shell {
 .groupby-tbl tr.groupby-row:hover { background: var(--bg); }
 .groupby-tbl tr.groupby-row:focus-visible { outline: 2px solid var(--bid); outline-offset: -2px; }
 
-/* Airbnb-style category carousel (Phase 6) — horizontal scrollable pill row
-   above the Live bids overview charts. Pills reuse the same cross-filter
-   helper as the pie-slice click, so state stays unified. */
-.lb-catnav {
-  position: relative;
-  display: flex; align-items: center;
-  margin-bottom: var(--space-md);
+/* ================================================================================
+   Airbnb-style pillbox search bar (Live bids · Phase 6c)
+   Fully-rounded outer pill, hairline dividers between segments, on hover
+   one segment lifts and gets its own subtle background pill inside the
+   outer shell. Circular brand-red search button on the right.
+   ================================================================================ */
+.lb-pillbox {
+  display: flex;
+  align-items: stretch;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  box-shadow: var(--shadow-2);
+  padding: 6px;
+  gap: 0;
+  margin: 0 auto var(--space-lg);
+  max-width: 880px;
+  transition: box-shadow var(--dur-fast) var(--ease);
 }
-.lb-catnav__track {
+.lb-pillbox:hover { box-shadow: var(--shadow-3); }
+
+.lb-pill {
+  position: relative;
+  flex: 1 1 0;
+  min-width: 0;
+  display: flex;
+  border-radius: 999px;
+  transition: background var(--dur-fast) var(--ease);
+}
+.lb-pill:hover { background: var(--bg); }
+.lb-pill[open] { background: var(--bg); box-shadow: 0 1px 3px rgba(84,86,91,.08); }
+
+.lb-pill__summary {
   flex: 1;
-  display: flex; gap: var(--space-sm);
+  display: flex; flex-direction: column;
+  justify-content: center;
+  padding: 10px 22px;
+  cursor: pointer;
+  list-style: none;
+  min-width: 0;
+  border-radius: 999px;
+}
+.lb-pill__summary::-webkit-details-marker { display: none; }
+.lb-pill__summary:focus-visible { outline: 2px solid var(--bid); outline-offset: 2px; border-radius: 999px; }
+
+.lb-pill__label {
+  font-family: var(--f-body);
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--gov-strong);
+  text-transform: uppercase;
+  letter-spacing: .04em;
+  line-height: 1;
+  margin-bottom: 4px;
+}
+.lb-pill__value {
+  font-size: 13px;
+  color: var(--muted);
+  line-height: 1.2;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.lb-pill__value.is-set { color: var(--gov-strong); font-weight: 500; }
+
+.lb-pill__divider {
+  width: 1px;
+  background: var(--line);
+  margin: 10px 0;
+  transition: opacity var(--dur-fast) var(--ease);
+}
+/* Fade the divider next to a hovered/open segment (Airbnb behaviour) */
+.lb-pill:hover + .lb-pill__divider,
+.lb-pill[open] + .lb-pill__divider,
+.lb-pillbox .lb-pill__divider:has(+ .lb-pill:hover),
+.lb-pillbox .lb-pill__divider:has(+ .lb-pill[open]) { opacity: 0; }
+
+/* Popover panel */
+.lb-pill__body {
+  position: absolute;
+  z-index: 40;
+  top: calc(100% + 10px);
+  left: 0; right: 0;
+  min-width: 320px;
+  padding: 12px;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-3);
+}
+.lb-pill__body .checklist {
+  max-height: 340px; overflow-y: auto;
+  border: none; padding: 0;
+}
+
+/* Size — quick-preset buttons + custom min/max */
+.lb-pill__sizes,
+.lb-pill__deadlines {
+  display: flex; flex-wrap: wrap; gap: 6px;
+}
+.lb-sizebtn, .lb-dlbtn {
+  padding: 8px 14px;
+  min-height: 36px;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-pill);
+  font-family: var(--f-body); font-size: 13px;
+  color: var(--gov);
+  cursor: pointer;
+  transition: background var(--dur-fast) var(--ease),
+              border-color var(--dur-fast) var(--ease),
+              color var(--dur-fast) var(--ease);
+}
+.lb-sizebtn:hover, .lb-dlbtn:hover { border-color: var(--line-strong); }
+.lb-sizebtn.is-active, .lb-dlbtn.is-active {
+  background: var(--gov-strong); border-color: var(--gov-strong); color: var(--card);
+}
+.lb-pill__custom {
+  display: flex; gap: 12px;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}
+.lb-pill__custom label {
+  flex: 1;
+  display: flex; flex-direction: column; gap: 4px;
+  font-size: 11px; text-transform: uppercase; letter-spacing: .05em;
+  color: var(--muted); font-weight: 600;
+}
+.lb-pill__custom input { width: 100%; }
+
+/* Circular search button on the right of the pillbox */
+.lb-pill__search {
+  flex: 0 0 auto;
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 48px; height: 48px;
+  background: var(--bid);
+  color: #fff;
+  border: none;
+  border-radius: 50%;
+  cursor: pointer;
+  margin-left: 6px;
+  transition: background var(--dur-fast) var(--ease), transform var(--dur-fast) var(--ease);
+}
+.lb-pill__search:hover  { background: var(--bid-hover); transform: scale(1.04); }
+.lb-pill__search:active { transform: scale(0.98); }
+.lb-pill__search:focus-visible { outline: 3px solid rgba(224,60,49,.35); outline-offset: 2px; }
+.lb-pill__search svg { width: 22px; height: 22px; }
+
+/* Mobile: pillbox stacks the 3 segments vertically. Dividers rotate. */
+@media (max-width: 720px) {
+  .lb-pillbox {
+    flex-direction: column;
+    border-radius: var(--radius-lg);
+    padding: 8px;
+  }
+  .lb-pill { border-radius: var(--radius); }
+  .lb-pill__summary { border-radius: var(--radius); }
+  .lb-pill__divider { width: auto; height: 1px; margin: 4px 12px; }
+  .lb-pill__body {
+    position: static;
+    box-shadow: none;
+    border: none;
+    padding: 8px 0;
+  }
+  .lb-pill__search { align-self: stretch; width: auto; border-radius: var(--radius); height: 44px; margin-left: 0; margin-top: 8px; }
+}
+
+
+/* Featured tenders row (Airbnb hero style · Phase 6c) */
+.lb-featured { margin-bottom: var(--space-lg); }
+.lb-featured__head {
+  display: flex; align-items: baseline; gap: var(--space-md);
+  margin-bottom: var(--space-sm);
+}
+.lb-featured__title {
+  margin: 0;
+  font-family: var(--f-head);
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--gov-strong);
+}
+.lb-featured__sub { font-size: 12px; }
+.lb-featured__row {
+  display: flex;
+  gap: var(--space-md);
   overflow-x: auto;
   scroll-behavior: smooth;
-  scrollbar-width: none;                            /* Firefox */
-  -ms-overflow-style: none;                          /* IE / old Edge */
-  padding: 4px 0;                                    /* room for focus outlines */
+  scrollbar-width: none;
+  padding: 4px 4px 12px;
   scroll-snap-type: x proximity;
 }
-.lb-catnav__track::-webkit-scrollbar { display: none; }  /* WebKit */
-.lb-catpill {
-  flex: 0 0 auto;
+.lb-featured__row::-webkit-scrollbar { display: none; }
+.lb-featured__empty { padding: 24px; text-align: center; }
+
+.lb-fcard {
+  flex: 0 0 260px;
+  scroll-snap-align: start;
+  position: relative;
+  padding: 16px;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-1);
+  display: flex; flex-direction: column; gap: 6px;
+  transition: box-shadow var(--dur-fast) var(--ease), transform var(--dur-fast) var(--ease);
+}
+.lb-fcard:hover { box-shadow: var(--shadow-2); transform: translateY(-2px); }
+.lb-fcard__badge {
+  position: absolute; top: 12px; right: 12px;
+  padding: 3px 8px;
+  background: var(--bid);
+  color: #fff;
+  font-size: 10px; font-weight: 700;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  border-radius: var(--radius-pill);
+}
+.lb-fcard__title {
+  margin: 0;
+  font-family: var(--f-head);
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.3;
+  color: var(--gov-strong);
+  padding-right: 60px;                             /* room for the badge */
+  display: -webkit-box;
+  -webkit-line-clamp: 3; -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.lb-fcard__title a { color: inherit; text-decoration: none; }
+.lb-fcard__title a:hover { color: var(--bid); }
+.lb-fcard__buyer { margin: 0; font-size: 12px; color: var(--muted); }
+.lb-fcard__cat {
+  align-self: flex-start;
+  padding: 2px 8px;
+  background: var(--bg);
+  border-radius: var(--radius-pill);
+  font-size: 11px;
+  color: var(--gov);
+}
+.lb-fcard__meta {
+  margin-top: auto;
+  padding-top: 8px;
+  border-top: 1px solid var(--line);
+  display: flex; justify-content: space-between; align-items: baseline;
+}
+.lb-fcard__value {
+  font-family: var(--f-head);
+  font-weight: 600;
+  font-size: 15px;
+  color: var(--gov-strong);
+  font-variant-numeric: tabular-nums;
+}
+.lb-fcard__deadline { text-align: right; font-size: 11px; }
+.lb-fcard__dlabs { display: block; color: var(--muted); }
+.lb-fcard__dlrel { color: var(--gov); font-weight: 500; }
+.lb-fcard__deadline.is-urgent .lb-fcard__dlrel { color: var(--bid); }
+.lb-fcard__deadline.is-urgent .lb-fcard__dlabs { color: var(--bid-hover); }
+
+
+/* Category / Source dropdowns in the Live bids filter bar (Phase 6b).
+   Native <details> so the checklist stays multi-select without a custom widget.
+   Positioned so the panel floats over the page (doesn't push the row down). */
+.lb-drop {
+  position: relative;
+  display: inline-block;
+}
+.lb-drop__summary {
   display: inline-flex; align-items: center; gap: 8px;
   padding: 8px 14px;
   min-height: 40px;
   background: var(--card);
   border: 1px solid var(--line);
-  border-radius: var(--radius-pill);
+  border-radius: var(--radius-sm);
   font-family: var(--f-body); font-size: 13px; font-weight: 500;
   color: var(--gov);
   cursor: pointer;
+  list-style: none;                              /* strip native triangle in Firefox */
+  user-select: none;
   white-space: nowrap;
-  scroll-snap-align: start;
-  transition: background var(--dur-fast) var(--ease),
-              border-color var(--dur-fast) var(--ease),
-              color var(--dur-fast) var(--ease),
-              transform var(--dur-fast) var(--ease);
+  transition: border-color var(--dur-fast) var(--ease);
 }
-.lb-catpill:hover        { border-color: var(--line-strong); transform: translateY(-1px); }
-.lb-catpill:focus-visible{ outline: 2px solid var(--bid); outline-offset: 2px; }
-.lb-catpill.is-active {
-  background: var(--gov-strong);
-  border-color: var(--gov-strong);
-  color: var(--card);
+.lb-drop__summary::-webkit-details-marker { display: none; }
+.lb-drop__summary::after {
+  content: '▾';
+  color: var(--muted);
+  font-size: 11px;
+  transition: transform var(--dur-fast) var(--ease);
 }
-.lb-catpill__count {
+.lb-drop[open] > .lb-drop__summary::after { transform: rotate(180deg); }
+.lb-drop__summary:hover { border-color: var(--line-strong); }
+.lb-drop__summary:focus-visible { outline: 2px solid var(--bid); outline-offset: 2px; }
+
+.lb-drop__count:empty { display: none; }
+.lb-drop__count {
+  min-width: 20px; height: 18px; padding: 0 6px;
   display: inline-flex; align-items: center; justify-content: center;
-  min-width: 22px; height: 20px; padding: 0 6px;
-  background: var(--bg);
-  border-radius: var(--radius-pill);
+  background: var(--gov-strong);
+  color: var(--card);
+  border-radius: 999px;
   font-size: 11px; font-weight: 600;
   font-variant-numeric: tabular-nums;
-  color: var(--gov-strong);
 }
-.lb-catpill.is-active .lb-catpill__count {
-  background: rgba(255,255,255,.15);
-  color: var(--card);
-}
-
-.lb-catnav__scroll {
-  flex: 0 0 auto;
-  width: 32px; height: 32px;
-  display: flex; align-items: center; justify-content: center;
+.lb-drop__body {
+  position: absolute; z-index: 40;
+  top: calc(100% + 4px); left: 0;
+  min-width: 240px; max-width: 320px;
   background: var(--card);
   border: 1px solid var(--line);
-  border-radius: 50%;
-  font-size: 18px; line-height: 1;
-  color: var(--gov);
-  cursor: pointer;
-  box-shadow: var(--shadow-1);
-  transition: background var(--dur-fast) var(--ease), transform var(--dur-fast) var(--ease);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-2);
+  padding: 8px;
 }
-.lb-catnav__scroll:hover { background: var(--bg); transform: scale(1.05); }
-.lb-catnav__scroll[hidden] { display: none; }
-.lb-catnav__scroll--left  { margin-right: 8px; }
-.lb-catnav__scroll--right { margin-left: 8px; }
+.lb-drop__body .checklist {
+  max-height: 320px; overflow-y: auto;
+  border: none; padding: 0;
+}
 
-/* On mobile: hide the ‹ › buttons entirely and rely on native touch scroll */
-@media (max-width: 767px) {
-  .lb-catnav__scroll { display: none !important; }
-  .lb-catnav__track  { padding: 4px var(--space-md); margin: 0 calc(-1 * var(--space-md)); }
-}
+/* (Old Airbnb-style .lb-catnav / .lb-catpill CSS deleted in Phase 6b — the
+   Category dropdown in the filter bar covers the same job. See git for the
+   deleted rules if we ever want to resurrect the pill carousel.) */
+
 
 /* Live bids overview charts (Phase 5 addition) — 3-across on desktop, stack on mobile */
 .lb-charts { padding: var(--space-md); }

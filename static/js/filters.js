@@ -376,6 +376,13 @@ export function wireColumnPopovers(refresh) {
 /**
  * Serialise the Live bids slim filter bar into URLSearchParams for /api/live-tenders.
  * Never sends `open_only` — the server already forces deadline >= now.
+ *
+ * Deadline: two modes coexist without conflict.
+ *   1. Hidden #lbDeadlineAfter / #lbDeadlineBefore — set by chart-bar clicks
+ *      to an EXACT differential range (e.g. "15–30 days" = +15d .. +30d).
+ *   2. #lbDeadlineWindow select — cumulative ("Closing ≤ 7/14/30 days"),
+ *      used when the hidden inputs are empty. The chart-click handler clears
+ *      this select when it sets the hidden range, so the two never fight.
  */
 export function buildLiveBidsQuery() {
   const p = new URLSearchParams();
@@ -384,13 +391,21 @@ export function buildLiveBidsQuery() {
   const min = $('#lbMin')?.value, max = $('#lbMax')?.value;
   if (min) p.set('value_min', min);
   if (max) p.set('value_max', max);
-  // "Deadline window" quick-picks: '', '7', '14', '30'
-  const window = $('#lbDeadlineWindow')?.value || '';
-  if (window) {
-    const today = new Date().toISOString().slice(0,10);
-    const plus  = n => new Date(Date.now() + n*86400000).toISOString().slice(0,10);
-    p.set('deadline_before', plus(parseInt(window, 10)));
-    p.set('deadline_after', today);
+  // Prefer exact differential range from hidden inputs
+  const exactAfter  = $('#lbDeadlineAfter')?.value;
+  const exactBefore = $('#lbDeadlineBefore')?.value;
+  if (exactAfter || exactBefore) {
+    if (exactAfter)  p.set('deadline_after',  exactAfter);
+    if (exactBefore) p.set('deadline_before', exactBefore);
+  } else {
+    // Fall back to cumulative "Closing ≤ N days" select
+    const window = $('#lbDeadlineWindow')?.value || '';
+    if (window) {
+      const today = new Date().toISOString().slice(0, 10);
+      const plus  = n => new Date(Date.now() + n * 86400000).toISOString().slice(0, 10);
+      p.set('deadline_before', plus(parseInt(window, 10)));
+      p.set('deadline_after', today);
+    }
   }
   $$('#lbCategory input:checked').forEach(el => p.append('category', el.value));
   $$('#lbSource input:checked').forEach(el => p.append('source', el.value));
@@ -423,33 +438,46 @@ export function loadLiveBidsFromUrl() {
 export async function loadLiveBidsFacets() {
   const r = await api('/api/facets');
   if (!r) return null;
+  // Rendered as a standard checklist (was chip pills before Phase 6 restructure)
+  // so they slot into the <details> dropdown containers in the filter bar.
   const catBox = $('#lbCategory'), srcBox = $('#lbSource');
   if (catBox) {
     catBox.innerHTML = r.categories.map(c =>
-      `<label class="chip"><input type="checkbox" value="${escapeHtml(c)}">${escapeHtml(c)}</label>`
+      `<label><input type="checkbox" value="${escapeHtml(c)}">${escapeHtml(c)}</label>`
     ).join('');
   }
   if (srcBox) {
     srcBox.innerHTML = r.sources.map(s =>
-      `<label class="chip"><input type="checkbox" value="${escapeHtml(s)}">${escapeHtml(s)}</label>`
+      `<label><input type="checkbox" value="${escapeHtml(s)}">${escapeHtml(s)}</label>`
     ).join('');
   }
   return r;
 }
 
 export function wireLiveBidsFilters(refresh) {
+  // Visible controls
   ['#lbQ', '#lbMin', '#lbMax', '#lbDeadlineWindow', '#lbSort'].forEach(sel => {
     const el = $(sel); if (!el) return;
     ['input', 'change'].forEach(evt => el.addEventListener(evt, () => refresh(200)));
   });
+  // Hidden differential-range inputs set by chart bar clicks
+  ['#lbDeadlineAfter', '#lbDeadlineBefore'].forEach(sel => {
+    const el = $(sel); if (!el) return;
+    el.addEventListener('change', () => refresh(50));
+  });
+  // Category / Source dropdown checkboxes (delegated)
   document.body.addEventListener('change', e => {
     if (e.target.matches('#lbCategory input, #lbSource input')) refresh(100);
   });
   const resetBtn = $('#lbResetBtn');
   if (resetBtn) {
     resetBtn.addEventListener('click', () => {
-      $('#lbQ').value = ''; $('#lbMin').value = ''; $('#lbMax').value = '';
+      $('#lbQ').value = '';
+      $('#lbMin').value = ''; $('#lbMax').value = '';
       $('#lbDeadlineWindow').value = '';
+      const after = $('#lbDeadlineAfter'), before = $('#lbDeadlineBefore');
+      if (after)  after.value  = '';
+      if (before) before.value = '';
       $('#lbSort').value = 'deadline';
       $$('#lbCategory input, #lbSource input').forEach(el => el.checked = false);
       refresh();

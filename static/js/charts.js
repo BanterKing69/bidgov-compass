@@ -33,15 +33,19 @@ export function upsertChart(id, cfg) {
 // so page code can pick and mix. --------------------------------------------
 
 export function renderCategoryChart(s) {
-  const catRows = s.by_category.slice(0, 10);
-  const otherN  = s.by_category.slice(10).reduce((a, b) => a + b.n, 0);
+  // Show up to 14 real slices + reserved "Other" grey; palette expanded
+  // from 10 → 15 colours so adjacent slices no longer share a hue.
+  const catRows = s.by_category.slice(0, 14);
+  const otherN  = s.by_category.slice(14).reduce((a, b) => a + b.n, 0);
   const catLabels = catRows.map(r => r.k).concat(otherN ? ['Other'] : []);
   const catData   = catRows.map(r => r.n).concat(otherN ? [otherN] : []);
+  const catBg     = catRows.map((_, i) => C.ramp[i])
+                           .concat(otherN ? [C.ramp[14]] : []);
   upsertChart('chartCategory', {
     type: 'doughnut',
     data: {
       labels: catLabels,
-      datasets: [{ data: catData, backgroundColor: C.ramp, borderColor: '#fff', borderWidth: 2 }]
+      datasets: [{ data: catData, backgroundColor: catBg, borderColor: '#fff', borderWidth: 2 }]
     },
     options: {
       responsive: true, maintainAspectRatio: false, cutout: '55%',

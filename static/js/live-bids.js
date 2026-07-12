@@ -4,7 +4,7 @@
    locked to deadline >= now) and /api/live-stats for the KPI numbers.
    ----------------------------------------------------------------------- */
 
-import { $, $$, C, escapeHtml, fmtGBP, fmtInt } from './fmt.js';
+import { $, C, escapeHtml, fmtDate, fmtGBP, fmtInt, fmtRelDeadline, deadlineUrgency } from './fmt.js';
 import { api } from './api.js';
 import { upsertChart } from './charts.js';
 import {
@@ -18,8 +18,54 @@ function refresh(delay = 0) {
   clearTimeout(refreshTimer);
   refreshTimer = setTimeout(async () => {
     pushLiveBidsUrlState();
-    await Promise.all([refreshKpis(), refreshTable()]);
+    await Promise.all([refreshKpis(), refreshFeatured(), refreshTable()]);
   }, delay);
+}
+
+/* ==========================================================================
+   Featured tenders — Airbnb hero-style horizontal card row.
+   Cards land ABOVE the filter bar so the page opens with "here are the top
+   sweet-spot picks", the same way Airbnb's home page opens with curated rows.
+   Reshapes on every filter change (same refresh cycle as KPIs + charts + table).
+   ========================================================================== */
+async function refreshFeatured() {
+  const row = $('#lbFeaturedRow');
+  if (!row) return;
+  const p = buildLiveBidsQuery();
+  p.set('limit', 10);
+  const r = await api('/api/live-featured?' + p.toString());
+  if (!r) return;
+  const rows = r.rows || [];
+  if (!rows.length) {
+    row.innerHTML = '<div class="lb-featured__empty muted">No live bids match the current filters.</div>';
+    return;
+  }
+  row.innerHTML = rows.map(renderFeaturedCard).join('');
+}
+
+function renderFeaturedCard(t) {
+  const urgency = deadlineUrgency(t.deadline);
+  const isUrgent = urgency === 'today' || urgency === 'week';
+  const dlAbs = t.deadline ? fmtDate(t.deadline) : '';
+  const dlRel = fmtRelDeadline(t.deadline);
+  const value = t.value_amount != null ? fmtGBP(t.value_amount) : '–';
+  const isSweet = t.is_sweet === 1;
+  const link = t.notice_url
+    ? `<a href="${escapeHtml(t.notice_url)}" target="_blank" rel="noopener" title="Open notice on source portal">${escapeHtml(t.title || '')}</a>`
+    : escapeHtml(t.title || '');
+  return `<article class="lb-fcard" role="listitem">
+    ${isSweet ? '<span class="lb-fcard__badge">Sweet-spot</span>' : ''}
+    <h3 class="lb-fcard__title">${link}</h3>
+    <p class="lb-fcard__buyer">${escapeHtml(t.buyer_name || '')}</p>
+    ${t.category ? `<span class="lb-fcard__cat">${escapeHtml(t.category)}</span>` : ''}
+    <div class="lb-fcard__meta">
+      <div class="lb-fcard__value">${value}</div>
+      <div class="lb-fcard__deadline${isUrgent ? ' is-urgent' : ''}">
+        <span class="lb-fcard__dlabs">${dlAbs}</span>
+        <span class="lb-fcard__dlrel">${escapeHtml(dlRel)}</span>
+      </div>
+    </div>
+  </article>`;
 }
 
 async function refreshKpis() {
@@ -29,9 +75,63 @@ async function refreshKpis() {
   $('#lbKpiOpen').textContent    = fmtInt(s.open_count);
   $('#lbKpiValue').textContent   = fmtGBP(s.total_open_value);
   $('#lbKpiValue').title         = s.total_open_value.toLocaleString('en-GB', { style: 'currency', currency: 'GBP' });
+  $('#lbKpiMedian').textContent  = fmtGBP(s.median_value);
+  $('#lbKpiMedian').title        = (s.median_value || 0).toLocaleString('en-GB', { style: 'currency', currency: 'GBP' });
   $('#lbKpiClosing').textContent = fmtInt(s.closing_7d);
-  renderCategoryCarousel(s);   // Airbnb-style pill row above the charts
   renderOverviewCharts(s);
+  paintPillboxSummaries();     // sync Category/Size/Deadline pillbox labels
+}
+
+/** Update the human-readable summary strings on each pill segment so the
+ *  user can see the current selection without opening the popover. */
+function paintPillboxSummaries() {
+  // ---- Category
+  const catValue = $('#lbPillCatValue');
+  if (catValue) {
+    const checked = [...document.querySelectorAll('#lbCategory input:checked')];
+    if (!checked.length) {
+      catValue.textContent = 'Any'; catValue.classList.remove('is-set');
+    } else if (checked.length === 1) {
+      catValue.textContent = checked[0].value; catValue.classList.add('is-set');
+    } else {
+      catValue.textContent = `${checked[0].value} + ${checked.length - 1} more`;
+      catValue.classList.add('is-set');
+    }
+  }
+  // ---- Size
+  const sizeValue = $('#lbPillSizeValue');
+  if (sizeValue) {
+    const min = $('#lbMin')?.value, max = $('#lbMax')?.value;
+    if (!min && !max) { sizeValue.textContent = 'Any value'; sizeValue.classList.remove('is-set'); }
+    else {
+      const fmt = v => v ? '£' + (v >= 1e6 ? (v/1e6).toFixed(1)+'m' : Math.round(v/1e3)+'k') : '';
+      sizeValue.textContent = min && max ? `${fmt(min)} – ${fmt(max)}` : min ? `${fmt(min)}+` : `up to ${fmt(max)}`;
+      sizeValue.classList.add('is-set');
+    }
+  }
+  // ---- Deadline (exact-range takes precedence over cumulative window)
+  const dlValue = $('#lbPillDeadlineValue');
+  if (dlValue) {
+    const after = $('#lbDeadlineAfter')?.value, before = $('#lbDeadlineBefore')?.value;
+    const win = $('#lbDeadlineWindow')?.value;
+    if (after || before) {
+      dlValue.textContent = 'Custom range'; dlValue.classList.add('is-set');
+    } else if (win) {
+      dlValue.textContent = `Closing ≤ ${win} days`; dlValue.classList.add('is-set');
+    } else {
+      dlValue.textContent = 'Any'; dlValue.classList.remove('is-set');
+    }
+  }
+  // Also paint active state on the quick-preset buttons in Size + Deadline popovers
+  const min = $('#lbMin')?.value || '', max = $('#lbMax')?.value || '';
+  document.querySelectorAll('.lb-sizebtn').forEach(b => {
+    const [pMin, pMax] = b.dataset.sizePreset.split(',');
+    b.classList.toggle('is-active', pMin === min && pMax === max);
+  });
+  const win = $('#lbDeadlineWindow')?.value || '';
+  document.querySelectorAll('.lb-dlbtn').forEach(b => {
+    b.classList.toggle('is-active', b.dataset.dlWindow === win);
+  });
 }
 
 /* ==========================================================================
@@ -53,20 +153,39 @@ function toggleCategoryFilter(category) {
   cb.dispatchEvent(new Event('change', { bubbles: true }));
 }
 
-/** Deadline bucket → set the #lbDeadlineWindow select to the matching window.
- *  Clicking the SAME bucket clears it (toggle). */
-const DEADLINE_BUCKET_TO_WINDOW = {
-  '≤7 days':   '7',
-  '8–14 days': '14',
-  '15–30 days': '30',
-  // 1–3 months and 3+ months have no matching window value; drop these clicks
+/** Deadline bucket → apply the EXACT differential range to the hidden
+ *  #lbDeadlineAfter / #lbDeadlineBefore inputs, matching the chart bucket
+ *  the user clicked. This fixes the earlier bug where clicking "15–30 days"
+ *  sent a cumulative "≤30 days" filter that kept ≤7 and 8–14 rows in view.
+ *  Also clears the cumulative #lbDeadlineWindow select so the two filter
+ *  modes don't conflict. Second click on the same bucket = clear. */
+const DEADLINE_BUCKETS = {
+  '≤7 days':    { afterDays: 0,  beforeDays: 7 },
+  '8–14 days':  { afterDays: 8,  beforeDays: 14 },
+  '15–30 days': { afterDays: 15, beforeDays: 30 },
+  '1–3 months': { afterDays: 31, beforeDays: 90 },
+  '3+ months':  { afterDays: 91, beforeDays: null },  // open-ended top
 };
 function toggleDeadlineFilter(bucketLabel) {
-  const val = DEADLINE_BUCKET_TO_WINDOW[bucketLabel];
-  if (!val) return;
-  const sel = $('#lbDeadlineWindow');
-  sel.value = (sel.value === val) ? '' : val;
-  sel.dispatchEvent(new Event('change', { bubbles: true }));
+  const spec = DEADLINE_BUCKETS[bucketLabel];
+  if (!spec) return;
+  const plus = n => new Date(Date.now() + n * 86400000).toISOString().slice(0, 10);
+  const after  = $('#lbDeadlineAfter');
+  const before = $('#lbDeadlineBefore');
+  const wantAfter  = plus(spec.afterDays);
+  const wantBefore = spec.beforeDays != null ? plus(spec.beforeDays) : '';
+  const alreadySet = after.value === wantAfter && before.value === wantBefore;
+  if (alreadySet) {
+    after.value = '';
+    before.value = '';
+  } else {
+    after.value = wantAfter;
+    before.value = wantBefore;
+    // Clear the cumulative select so it doesn't fight the exact range
+    const sel = $('#lbDeadlineWindow');
+    if (sel) sel.value = '';
+  }
+  after.dispatchEvent(new Event('change', { bubbles: true }));
 }
 
 /** Value band → set min/max range. Same band clicked twice = clear. */
@@ -100,68 +219,10 @@ function toggleValueFilter(bandLabel) {
    Repaints on every `by_category` update so counts + active state stay live.
    ========================================================================== */
 
-const CATNAV_TOP_N = 15;   // top 15 categories by open count on the CURRENT filter scope
-
-/** Read the currently-checked chips so pills can show the active state. */
-function getCheckedCategories() {
-  return new Set(
-    $$('#lbCategory input[type="checkbox"]:checked').map(el => el.value)
-  );
-}
-
-function renderCategoryCarousel(s) {
-  const track = $('#lbCatnavTrack');
-  if (!track) return;
-  const rows = (s.by_category || []).slice(0, CATNAV_TOP_N);
-  const checked = getCheckedCategories();
-  track.innerHTML = rows.map(r => {
-    const isActive = checked.has(r.k);
-    return `<button type="button" role="tab"
-                    class="lb-catpill${isActive ? ' is-active' : ''}"
-                    data-cat="${escapeHtml(r.k)}"
-                    aria-pressed="${isActive}">
-      <span class="lb-catpill__name">${escapeHtml(r.k)}</span>
-      <span class="lb-catpill__count">${r.n}</span>
-    </button>`;
-  }).join('');
-  syncCarouselScrollButtons();
-}
-
-/** Show/hide the ‹ › scroll buttons based on scroll position. */
-function syncCarouselScrollButtons() {
-  const track = $('#lbCatnavTrack');
-  if (!track) return;
-  const left = track.parentElement.querySelector('.lb-catnav__scroll--left');
-  const right = track.parentElement.querySelector('.lb-catnav__scroll--right');
-  const canScroll = track.scrollWidth > track.clientWidth;
-  const atStart = track.scrollLeft <= 4;
-  const atEnd = track.scrollLeft + track.clientWidth >= track.scrollWidth - 4;
-  if (left)  left.hidden  = !canScroll || atStart;
-  if (right) right.hidden = !canScroll || atEnd;
-}
-
-/** Wire click → toggleCategoryFilter, scroll button clicks, and scroll-state
- *  updates for the ‹ › affordance. Idempotent — safe to call once at boot. */
-function wireCategoryCarousel() {
-  const track = $('#lbCatnavTrack');
-  if (!track) return;
-  // Delegated pill click
-  track.addEventListener('click', (e) => {
-    const pill = e.target.closest('.lb-catpill');
-    if (!pill) return;
-    toggleCategoryFilter(pill.dataset.cat);
-  });
-  // Scroll buttons
-  const nav = track.parentElement;
-  nav.querySelector('.lb-catnav__scroll--left')?.addEventListener('click', () => {
-    track.scrollBy({ left: -track.clientWidth * 0.8, behavior: 'smooth' });
-  });
-  nav.querySelector('.lb-catnav__scroll--right')?.addEventListener('click', () => {
-    track.scrollBy({ left:  track.clientWidth * 0.8, behavior: 'smooth' });
-  });
-  track.addEventListener('scroll', syncCarouselScrollButtons, { passive: true });
-  window.addEventListener('resize', syncCarouselScrollButtons);
-}
+/* Category carousel removed — the Category dropdown in the filter bar +
+   the pie chart + the cross-filter click cover the same job without
+   duplication. escapeHtml + $$ imports may become unused in this file;
+   fmt.js keeps them exported for other pages. */
 
 /**
  * Three charts above the table (Phase 5 addition):
@@ -178,15 +239,20 @@ function renderOverviewCharts(s) {
 
   // ---- 1. Category doughnut (top 10 + "Other") --------------------------
   const cats = s.by_category || [];
-  const top = cats.slice(0, 10);
-  const other = cats.slice(10).reduce((a, b) => a + b.n, 0);
+  // Show up to 14 real slices + the reserved "Other" grey (ramp[14]).
+  // Was capped at 10 → 4 more real categories visible before rolling up.
+  const top = cats.slice(0, 14);
+  const other = cats.slice(14).reduce((a, b) => a + b.n, 0);
+  const bgs = top.map((_, i) => C.ramp[i]);
+  const labels = top.map(r => r.k);
+  if (other) { labels.push('Other'); bgs.push(C.ramp[14]); }
   upsertChart('lbChartCategory', {
     type: 'doughnut',
     data: {
-      labels: top.map(r => r.k).concat(other ? ['Other'] : []),
+      labels,
       datasets: [{
         data: top.map(r => r.n).concat(other ? [other] : []),
-        backgroundColor: C.ramp,
+        backgroundColor: bgs,
         borderColor: '#fff',
         borderWidth: 2,
       }],
@@ -305,13 +371,55 @@ function wireEmptyStateClear() {
   });
 }
 
+/** Wire the pillbox preset buttons — Size ("£30k-£135k" etc.) and Deadline
+ *  ("Closing ≤ 7 days" etc.). Toggling a preset writes to the hidden inputs
+ *  that buildLiveBidsQuery reads, then fires refresh via the standard
+ *  wireLiveBidsFilters listeners. Second click on the same preset clears. */
+function wirePillboxPresets() {
+  const pillbox = document.querySelector('.lb-pillbox');
+  if (!pillbox) return;
+  pillbox.addEventListener('click', (e) => {
+    const size = e.target.closest('.lb-sizebtn');
+    if (size) {
+      const [pMin, pMax] = size.dataset.sizePreset.split(',');
+      const min = $('#lbMin'), max = $('#lbMax');
+      const already = (min.value === pMin) && (max.value === pMax);
+      min.value = already ? '' : pMin;
+      max.value = already ? '' : pMax;
+      min.dispatchEvent(new Event('input', { bubbles: true }));
+      return;
+    }
+    const dl = e.target.closest('.lb-dlbtn');
+    if (dl) {
+      const sel = $('#lbDeadlineWindow');
+      const already = sel.value === dl.dataset.dlWindow;
+      sel.value = already ? '' : dl.dataset.dlWindow;
+      // Clear exact-range hidden inputs — cumulative select owns the state now
+      $('#lbDeadlineAfter').value = '';
+      $('#lbDeadlineBefore').value = '';
+      sel.dispatchEvent(new Event('change', { bubbles: true }));
+      return;
+    }
+  });
+  // The search button on the right of the pillbox is decorative (filters
+  // live-update); clicking it just forces an immediate refresh and closes
+  // any open popovers.
+  const searchBtn = $('#lbPillSearchBtn');
+  if (searchBtn) {
+    searchBtn.addEventListener('click', () => {
+      document.querySelectorAll('.lb-pill[open]').forEach(d => d.removeAttribute('open'));
+      refresh();
+    });
+  }
+}
+
 async function boot() {
   await loadLiveBidsFacets();
   loadLiveBidsFromUrl();
   wireLiveBidsFilters(refresh);
+  wirePillboxPresets();                   // Size + Deadline preset button wiring (Phase 6c)
   wireEmptyStateClear();
-  wireTrackButtons('#lbBody');           // admin-only Track button on rows (Phase 4)
-  wireCategoryCarousel();                 // Airbnb-style pill row (Phase 6)
+  wireTrackButtons('#lbBody');            // admin-only Save-deal button on rows
   refresh();                              // debounced internally; no promise to await
   window.addEventListener('popstate', () => { loadLiveBidsFromUrl(); refresh(); });
 }

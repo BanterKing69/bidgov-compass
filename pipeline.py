@@ -129,7 +129,7 @@ def list_pipeline() -> list[dict]:
     return rows
 
 
-def create_pipeline_row(*, tender_uid: str, client_name: str,
+def create_pipeline_row(*, tender_uid: str, client_name: str = "",
                         stage: str = "qualified",
                         fee_upfront: float = 1500.0,
                         fee_success_pct: float = 5.0,
@@ -137,8 +137,9 @@ def create_pipeline_row(*, tender_uid: str, client_name: str,
                         notes: str = "") -> tuple[Optional[int], Optional[str]]:
     if not tender_uid or not tender_uid.strip():
         return None, "tender_uid required"
-    if not client_name or not client_name.strip():
-        return None, "client_name required"
+    # client_name is optional at creation — the "Save deal" button on tender
+    # rows saves with an empty name; the admin fills it in inline on the
+    # Pipeline tab where they have the deal context to hand.
     if stage not in VALID_STAGES:
         return None, f"invalid stage; must be one of {VALID_STAGES}"
     now = _now_iso()

@@ -327,6 +327,38 @@ def api_live_tenders():
     return jsonify({"total": total, "returned": len(rows), "rows": rows})
 
 
+@app.route("/api/live-featured")
+def api_live_featured():
+    """Curated 'featured tenders' row for the Live bids hero carousel.
+    Ranking:
+      1. Sweet-spot bids (£30k–£300k AND has a mapped GovBid category)
+         win over everything else.
+      2. Within each group, closing soonest first (deadline ASC).
+    Honours the same filter params as /api/live-tenders so the row
+    reshapes when the user narrows other filters."""
+    where, params = _build_live_where(request.args)
+    limit = min(int(request.args.get("limit", 10)), 50)
+    cols = ("uid,source,title,category,buyer_name,buyer_region,"
+            "value_amount,value_currency,deadline,notice_url")
+    conn = db.connect()
+    try:
+        cur = conn.execute(
+            f"SELECT {cols}, "
+            f"       CASE WHEN value_amount BETWEEN 30000 AND 300000 "
+            f"             AND category IS NOT NULL THEN 1 ELSE 0 END AS is_sweet "
+            f"FROM tenders {where} "
+            f"ORDER BY is_sweet DESC, "
+            f"         (deadline IS NULL), deadline ASC "
+            f"LIMIT ?",
+            [*params, limit],
+        )
+        col_names = [d[0] for d in cur.description]
+        rows = [dict(zip(col_names, r)) for r in cur.fetchall()]
+    finally:
+        conn.close()
+    return jsonify({"rows": rows})
+
+
 @app.route("/api/live-stats")
 def api_live_stats():
     """KPI-strip + chart payload for the Live bids page. All aggregates are
@@ -342,6 +374,23 @@ def api_live_stats():
             f"FROM tenders {where}",
             params,
         ).fetchone()
+        # Median value over live tenders with a positive numeric value.
+        # Same technique used in /api/stats — resistant to megaframework skew.
+        median_row = conn.execute(
+            f"""
+            WITH ranked AS (
+                SELECT value_amount,
+                       ROW_NUMBER() OVER (ORDER BY value_amount) rn,
+                       COUNT(*) OVER () c
+                FROM tenders {where}
+                AND value_amount IS NOT NULL AND value_amount > 0
+            )
+            SELECT ROUND(AVG(value_amount)) FROM ranked
+            WHERE rn IN ((c + 1) / 2, (c + 2) / 2)
+            """,
+            params,
+        ).fetchone()
+        median_value = (median_row[0] if median_row else 0) or 0
         by_category = conn.execute(
             f"SELECT COALESCE(category,'(unmapped)') AS k, COUNT(*) AS n "
             f"FROM tenders {where} GROUP BY category ORDER BY n DESC",
@@ -371,12 +420,13 @@ def api_live_stats():
     finally:
         conn.close()
     return jsonify({
-        "open_count":       row[0] or 0,
-        "total_open_value": row[1] or 0,
-        "closing_7d":       row[2] or 0,
-        "by_category":      [{"k": r[0], "n": r[1]} for r in by_category],
-        "by_deadline":      [{"k": r[0], "n": r[1]} for r in by_deadline],
-        "by_value_band":    [{"k": r[0], "n": r[1]} for r in by_value_band],
+        "open_count":         row[0] or 0,
+        "total_open_value":   row[1] or 0,
+        "closing_7d":         row[2] or 0,
+        "median_value":       median_value,
+        "by_category":        [{"k": r[0], "n": r[1]} for r in by_category],
+        "by_deadline":        [{"k": r[0], "n": r[1]} for r in by_deadline],
+        "by_value_band":      [{"k": r[0], "n": r[1]} for r in by_value_band],
     })
 
 

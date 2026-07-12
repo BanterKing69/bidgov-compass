@@ -22,7 +22,7 @@
 
 <div class="lb-page">
 
-  {# ============================== KPI strip ============================== #}
+  {# ============================== KPI strip (4 tiles) ==================== #}
   <div class="kpis lb-kpis" role="region" aria-label="Live bids summary">
     <div class="kpi">
       <div class="kpi__label">Open tenders</div>
@@ -34,25 +34,17 @@
       <div id="lbKpiValue" class="kpi__value">–</div>
       <div class="kpi__delta muted">Sum of published values (nominal)</div>
     </div>
+    <div class="kpi">
+      <div class="kpi__label">Median value</div>
+      <div id="lbKpiMedian" class="kpi__value">–</div>
+      <div class="kpi__delta muted">Robust to megaframework outliers</div>
+    </div>
     <div class="kpi kpi--accent">
       <div class="kpi__label">Closing ≤ 7 days</div>
       <div id="lbKpiClosing" class="kpi__value">–</div>
       <div class="kpi__delta muted">Need attention this week</div>
     </div>
   </div>
-
-  {# ============================== Category carousel (Airbnb-style) =======
-     Horizontal scrollable pill row of the top N sweet-spot categories with
-     live counts. Clicking a pill toggles the matching #lbCategory chip
-     (same helper as the chart click), so it cross-filters the entire page.
-     Populated by live-bids.js from /api/live-stats.by_category. #}
-  <nav class="lb-catnav" aria-label="Browse by category">
-    <button class="lb-catnav__scroll lb-catnav__scroll--left" type="button" aria-label="Scroll categories left" hidden>‹</button>
-    <div class="lb-catnav__track" id="lbCatnavTrack" role="tablist">
-      <!-- pills injected here by JS -->
-    </div>
-    <button class="lb-catnav__scroll lb-catnav__scroll--right" type="button" aria-label="Scroll categories right" hidden>›</button>
-  </nav>
 
   {# ============================== Overview charts (Phase 5 addition) ===== #}
   <section class="panel lb-charts">
@@ -67,40 +59,101 @@
     </div>
   </section>
 
-  {# ============================== Filter bar ============================= #}
-  <section class="lb-filterbar panel" aria-label="Filters">
-    <div class="lb-filterbar__row">
-      <input id="lbQ" class="field" type="search" placeholder="Search title / buyer…" aria-label="Search" />
-      <select id="lbDeadlineWindow" class="field" aria-label="Deadline window">
-        <option value="">Any deadline</option>
-        <option value="7">Closing ≤ 7 days</option>
-        <option value="14">Closing ≤ 14 days</option>
-        <option value="30">Closing ≤ 30 days</option>
-      </select>
-      <div class="field--range">
-        <input id="lbMin" class="field" type="number" placeholder="min £" min="0" step="1000" aria-label="Min value" />
-        <span class="muted">—</span>
-        <input id="lbMax" class="field" type="number" placeholder="max £" min="0" step="1000" aria-label="Max value" />
-      </div>
-      <select id="lbSort" class="field" aria-label="Sort">
-        <option value="deadline">Sort: deadline ↑</option>
-        <option value="value_desc">Sort: value ↓</option>
-        <option value="value_asc">Sort: value ↑</option>
-        <option value="published_desc">Sort: newest first</option>
-      </select>
-      <button id="lbResetBtn" class="btn btn--secondary btn--sm" type="button">Reset</button>
+  {# ============================== Featured tenders (Airbnb hero style) ===
+     Horizontal scrollable row of curated tender cards — sweet-spot bids
+     closing soonest first. Reshapes with the current filter scope.
+     Populated by /api/live-featured. #}
+  <section class="lb-featured" aria-label="Featured tenders">
+    <div class="lb-featured__head">
+      <h2 class="lb-featured__title">Featured bids</h2>
+      <span class="lb-featured__sub muted">Sweet-spot picks (£30k–£300k, categorised) closing soonest</span>
     </div>
-    <div class="lb-filterbar__row lb-filterbar__row--chips">
-      <div class="lb-chipgroup">
-        <div class="lb-chipgroup__label">Category</div>
-        <div id="lbCategory" class="chiplist"></div>
-      </div>
-      <div class="lb-chipgroup">
-        <div class="lb-chipgroup__label">Source</div>
-        <div id="lbSource" class="chiplist"></div>
-      </div>
+    <div class="lb-featured__row" id="lbFeaturedRow" role="list">
+      <!-- cards injected here by live-bids.js -->
     </div>
   </section>
+
+  {# ============================== Pillbox search bar (Airbnb-style) ======
+     Three segments — Category · Size · Deadline — each opens a native
+     <details> popover with the actual controls inside. The central search
+     button is decorative (all filters live-update); it re-fires refresh().
+
+     The old min/max/date/sort/search inputs live on as HIDDEN inputs so the
+     existing buildLiveBidsQuery pipeline works unchanged — the pillbox is a
+     new UI surface over the same state, not a rewrite of the query layer.
+     Chart-click cross-filtering still targets those hidden inputs. #}
+  <section class="lb-pillbox" role="search" aria-label="Filter bids">
+    <details class="lb-pill">
+      <summary class="lb-pill__summary">
+        <span class="lb-pill__label">Category</span>
+        <span class="lb-pill__value" id="lbPillCatValue">Any</span>
+      </summary>
+      <div class="lb-pill__body">
+        <div id="lbCategory" class="checklist"></div>
+      </div>
+    </details>
+    <div class="lb-pill__divider" aria-hidden="true"></div>
+    <details class="lb-pill">
+      <summary class="lb-pill__summary">
+        <span class="lb-pill__label">Size</span>
+        <span class="lb-pill__value" id="lbPillSizeValue">Any value</span>
+      </summary>
+      <div class="lb-pill__body">
+        <div class="lb-pill__sizes">
+          <button type="button" class="lb-sizebtn" data-size-preset="30000,135000">£30k–£135k</button>
+          <button type="button" class="lb-sizebtn" data-size-preset="50000,300000">£50k–£300k (sweet-spot)</button>
+          <button type="button" class="lb-sizebtn" data-size-preset="135000,664000">£135k–£664k</button>
+          <button type="button" class="lb-sizebtn" data-size-preset="664000,">Over £664k</button>
+        </div>
+        <div class="lb-pill__custom">
+          <label>Min <input id="lbMin" class="field" type="number" min="0" step="1000" /></label>
+          <label>Max <input id="lbMax" class="field" type="number" min="0" step="1000" /></label>
+        </div>
+      </div>
+    </details>
+    <div class="lb-pill__divider" aria-hidden="true"></div>
+    <details class="lb-pill">
+      <summary class="lb-pill__summary">
+        <span class="lb-pill__label">Deadline</span>
+        <span class="lb-pill__value" id="lbPillDeadlineValue">Any</span>
+      </summary>
+      <div class="lb-pill__body">
+        <div class="lb-pill__deadlines">
+          <button type="button" class="lb-dlbtn" data-dl-window="7">Closing ≤ 7 days</button>
+          <button type="button" class="lb-dlbtn" data-dl-window="14">Closing ≤ 14 days</button>
+          <button type="button" class="lb-dlbtn" data-dl-window="30">Closing ≤ 30 days</button>
+          <button type="button" class="lb-dlbtn" data-dl-window="">Any deadline</button>
+        </div>
+      </div>
+    </details>
+    <button id="lbPillSearchBtn" class="lb-pill__search" type="button" aria-label="Search">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
+      </svg>
+    </button>
+
+    {# Hidden inputs that back the pillbox (buildLiveBidsQuery reads these). #}
+    <select id="lbDeadlineWindow" hidden aria-hidden="true">
+      <option value="" selected>Any deadline</option>
+      <option value="7">7</option><option value="14">14</option><option value="30">30</option>
+    </select>
+    <input id="lbDeadlineAfter" type="hidden" />
+    <input id="lbDeadlineBefore" type="hidden" />
+    <input id="lbQ" type="hidden" />
+    <select id="lbSort" hidden aria-hidden="true">
+      <option value="deadline" selected>deadline</option>
+    </select>
+    <input id="lbSource" type="hidden" />         {# retained container id so existing code doesn't NPE; empty by design #}
+    <button id="lbResetBtn" type="button" hidden aria-hidden="true"></button>
+  </section>
+
+  {# Source facet still needs SOMEWHERE — hidden container so loadLiveBidsFacets
+     doesn't crash. In the pillbox model, Source is de-emphasised (charts +
+     Category cover the common cases); if you want it back visibly, we can add
+     a 4th pill segment or a "More filters" affordance. #}
+  <div id="lbSourceHidden" hidden>
+    <div id="lbSource"></div>
+  </div>
 
   {# ============================== Table ================================== #}
   <section class="panel">

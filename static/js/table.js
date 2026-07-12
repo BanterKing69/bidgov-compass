@@ -20,10 +20,14 @@ export function rowHtml(t) {
   const dlCls = urgency === 'today' || urgency === 'week' ? 'is-urgent'
               : urgency === 'month' ? 'is-soon' : '';
   const rel = fmtRelDeadline(t.deadline);
-  // "Track" — admin-only. Server sets data-is-admin="1" on <body> for admins.
+  // "Save deal" — admin-only. Renders a bookmark-style icon inline in the
+  // title cell. Was "＋ Track" but "add client name" prompt was confusing on
+  // the shared tender view (client name belongs on the Pipeline tab where
+  // it can be filled in later, in context). Body[data-is-admin=1] is set
+  // server-side; non-admins get no button at all.
   const isAdmin = document.body.dataset.isAdmin === '1';
   const trackBtn = isAdmin
-    ? `<button class="tender-track" data-track-uid="${escapeHtml(t.uid || '')}" title="Track in pipeline" aria-label="Track">＋</button>`
+    ? `<button class="tender-track" data-track-uid="${escapeHtml(t.uid || '')}" title="Save to pipeline" aria-label="Save deal">🔖</button>`
     : '';
   const link = t.notice_url
     ? `<a href="${escapeHtml(t.notice_url)}" target="_blank" rel="noopener" title="Open notice on source portal">${escapeHtml(t.title)}</a>`
@@ -48,10 +52,11 @@ export function rowHtml(t) {
 }
 
 /**
- * Wire admin-only "Track" buttons in a table body. Prompts for client name
- * and POSTs to /api/admin/pipeline. Non-admin bodies contain no buttons so
- * this is a no-op for non-admins. Idempotent — safe to call after each
- * table re-render.
+ * Wire admin-only "Save deal" buttons in a table body. One click POSTs
+ * a new pipeline row with an empty client_name — the admin fills in the
+ * client on the Pipeline tab where all the deal context lives. Non-admin
+ * bodies contain no buttons so this is a no-op for non-admins.
+ * Idempotent — safe to call after each table re-render.
  */
 export function wireTrackButtons(tbodySelector, refreshOnAdd = null) {
   if (document.body.dataset.isAdmin !== '1') return;
@@ -64,17 +69,16 @@ export function wireTrackButtons(tbodySelector, refreshOnAdd = null) {
     e.preventDefault();
     e.stopPropagation();
     const uid = btn.dataset.trackUid;
-    const clientName = prompt('Client name for this deal?');
-    if (!clientName) return;
     btn.disabled = true;
     try {
       // Dynamic import so non-admin page bundles don't pull api.js twice.
       const { api } = await import('./api.js');
       const r = await api('/api/admin/pipeline', {
-        json: { tender_uid: uid, client_name: clientName },
+        json: { tender_uid: uid, client_name: '' },   // fill in on Pipeline tab
       });
       if (r && r.ok) {
         btn.textContent = '✓';
+        btn.title = 'Saved · edit on Admin → Pipeline';
         btn.classList.add('is-tracked');
         if (typeof refreshOnAdd === 'function') refreshOnAdd();
       }
