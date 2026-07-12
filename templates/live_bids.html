@@ -13,14 +13,107 @@
 
 {% block content %}
 
-<header class="page-header">
-  <h1 class="page-header__title">Live bids</h1>
-  <div class="page-header__actions">
-    <span class="page-header__meta" id="lbLastUpdated"></span>
-  </div>
-</header>
-
 <div class="lb-page">
+
+  {# ============================== Pillbox search bar (Airbnb-style) ======
+     Sits at the VERY TOP of the page — the primary affordance. Three
+     segments (Category · Size · Deadline) each open a <details> popover
+     with the actual controls inside. Circular brand-red search button on
+     the right forces refresh + closes any open popover.
+
+     The old min/max/date/sort/search inputs live on as HIDDEN inputs so
+     the existing buildLiveBidsQuery pipeline works unchanged — the pillbox
+     is a new UI surface over the same state, not a rewrite of the query
+     layer. Chart-click cross-filtering AND per-column table header filters
+     both target the same hidden inputs. #}
+  <section class="lb-pillbox lb-pillbox--wide" role="search" aria-label="Filter bids">
+    <details class="lb-pill">
+      <summary class="lb-pill__summary">
+        <span class="lb-pill__label">Category</span>
+        <span class="lb-pill__value" id="lbPillCatValue">Any</span>
+      </summary>
+      <div class="lb-pill__body">
+        <div id="lbCategory" class="checklist"></div>
+      </div>
+    </details>
+    <div class="lb-pill__divider" aria-hidden="true"></div>
+    <details class="lb-pill">
+      <summary class="lb-pill__summary">
+        <span class="lb-pill__label">Size</span>
+        <span class="lb-pill__value" id="lbPillSizeValue">Any value</span>
+      </summary>
+      <div class="lb-pill__body">
+        <div class="lb-pill__sizes">
+          <button type="button" class="lb-sizebtn" data-size-preset="30000,135000">£30k–£135k</button>
+          <button type="button" class="lb-sizebtn" data-size-preset="50000,300000">£50k–£300k (sweet-spot)</button>
+          <button type="button" class="lb-sizebtn" data-size-preset="135000,664000">£135k–£664k</button>
+          <button type="button" class="lb-sizebtn" data-size-preset="664000,">Over £664k</button>
+        </div>
+        <div class="lb-pill__custom">
+          <label>Min <input id="lbMin" class="field" type="number" min="0" step="1000" /></label>
+          <label>Max <input id="lbMax" class="field" type="number" min="0" step="1000" /></label>
+        </div>
+      </div>
+    </details>
+    <div class="lb-pill__divider" aria-hidden="true"></div>
+    <details class="lb-pill">
+      <summary class="lb-pill__summary">
+        <span class="lb-pill__label">Deadline</span>
+        <span class="lb-pill__value" id="lbPillDeadlineValue">Any</span>
+      </summary>
+      <div class="lb-pill__body">
+        <div class="lb-pill__deadlines">
+          <button type="button" class="lb-dlbtn" data-dl-window="7">Closing ≤ 7 days</button>
+          <button type="button" class="lb-dlbtn" data-dl-window="14">Closing ≤ 14 days</button>
+          <button type="button" class="lb-dlbtn" data-dl-window="30">Closing ≤ 30 days</button>
+          <button type="button" class="lb-dlbtn" data-dl-window="">Any deadline</button>
+        </div>
+      </div>
+    </details>
+    <button id="lbPillSearchBtn" class="lb-pill__search" type="button" aria-label="Search">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
+      </svg>
+    </button>
+
+    {# Hidden inputs backing the pillbox + column popovers.
+       buildLiveBidsQuery reads these; wireLiveBidsFilters listens for change. #}
+    <input id="lbDeadlineAfter" type="hidden" />
+    <input id="lbDeadlineBefore" type="hidden" />
+    <input id="lbQ" type="hidden" />
+    <select id="lbDeadlineWindow" hidden aria-hidden="true">
+      <option value="" selected>Any deadline</option>
+      <option value="7">7</option><option value="14">14</option><option value="30">30</option>
+    </select>
+    {# Full sort options — the sortable column headers cycle through
+       these; the select itself is hidden. Values mirror table.js:SORT_KEYS
+       (which match app.py:_ALLOWED_SORT). #}
+    <select id="lbSort" hidden aria-hidden="true">
+      <option value="deadline" selected>Deadline (soonest)</option>
+      <option value="deadline_desc">Deadline (latest)</option>
+      <option value="title_asc">Title A→Z</option>
+      <option value="title_desc">Title Z→A</option>
+      <option value="buyer_asc">Buyer A→Z</option>
+      <option value="buyer_desc">Buyer Z→A</option>
+      <option value="category_asc">Category A→Z</option>
+      <option value="category_desc">Category Z→A</option>
+      <option value="value_asc">Value ↑</option>
+      <option value="value_desc">Value ↓</option>
+      <option value="source_asc">Source A→Z</option>
+      <option value="source_desc">Source Z→A</option>
+    </select>
+    <button id="lbResetBtn" type="button" hidden aria-hidden="true"></button>
+  </section>
+
+  {# Compact page-header sits under the pillbox — identity + last-updated meta.
+     The pillbox is the primary affordance; the H1 provides accessible page
+     identity but doesn't compete for attention. #}
+  <header class="page-header page-header--compact">
+    <h1 class="page-header__title">Live bids</h1>
+    <div class="page-header__actions">
+      <span class="page-header__meta" id="lbLastUpdated"></span>
+    </div>
+  </header>
 
   {# ============================== KPI strip (4 tiles) ==================== #}
   <div class="kpis lb-kpis" role="region" aria-label="Live bids summary">
@@ -73,89 +166,16 @@
     </div>
   </section>
 
-  {# ============================== Pillbox search bar (Airbnb-style) ======
-     Three segments — Category · Size · Deadline — each opens a native
-     <details> popover with the actual controls inside. The central search
-     button is decorative (all filters live-update); it re-fires refresh().
-
-     The old min/max/date/sort/search inputs live on as HIDDEN inputs so the
-     existing buildLiveBidsQuery pipeline works unchanged — the pillbox is a
-     new UI surface over the same state, not a rewrite of the query layer.
-     Chart-click cross-filtering still targets those hidden inputs. #}
-  <section class="lb-pillbox" role="search" aria-label="Filter bids">
-    <details class="lb-pill">
-      <summary class="lb-pill__summary">
-        <span class="lb-pill__label">Category</span>
-        <span class="lb-pill__value" id="lbPillCatValue">Any</span>
-      </summary>
-      <div class="lb-pill__body">
-        <div id="lbCategory" class="checklist"></div>
-      </div>
-    </details>
-    <div class="lb-pill__divider" aria-hidden="true"></div>
-    <details class="lb-pill">
-      <summary class="lb-pill__summary">
-        <span class="lb-pill__label">Size</span>
-        <span class="lb-pill__value" id="lbPillSizeValue">Any value</span>
-      </summary>
-      <div class="lb-pill__body">
-        <div class="lb-pill__sizes">
-          <button type="button" class="lb-sizebtn" data-size-preset="30000,135000">£30k–£135k</button>
-          <button type="button" class="lb-sizebtn" data-size-preset="50000,300000">£50k–£300k (sweet-spot)</button>
-          <button type="button" class="lb-sizebtn" data-size-preset="135000,664000">£135k–£664k</button>
-          <button type="button" class="lb-sizebtn" data-size-preset="664000,">Over £664k</button>
-        </div>
-        <div class="lb-pill__custom">
-          <label>Min <input id="lbMin" class="field" type="number" min="0" step="1000" /></label>
-          <label>Max <input id="lbMax" class="field" type="number" min="0" step="1000" /></label>
-        </div>
-      </div>
-    </details>
-    <div class="lb-pill__divider" aria-hidden="true"></div>
-    <details class="lb-pill">
-      <summary class="lb-pill__summary">
-        <span class="lb-pill__label">Deadline</span>
-        <span class="lb-pill__value" id="lbPillDeadlineValue">Any</span>
-      </summary>
-      <div class="lb-pill__body">
-        <div class="lb-pill__deadlines">
-          <button type="button" class="lb-dlbtn" data-dl-window="7">Closing ≤ 7 days</button>
-          <button type="button" class="lb-dlbtn" data-dl-window="14">Closing ≤ 14 days</button>
-          <button type="button" class="lb-dlbtn" data-dl-window="30">Closing ≤ 30 days</button>
-          <button type="button" class="lb-dlbtn" data-dl-window="">Any deadline</button>
-        </div>
-      </div>
-    </details>
-    <button id="lbPillSearchBtn" class="lb-pill__search" type="button" aria-label="Search">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-        <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
-      </svg>
-    </button>
-
-    {# Hidden inputs that back the pillbox (buildLiveBidsQuery reads these). #}
-    <select id="lbDeadlineWindow" hidden aria-hidden="true">
-      <option value="" selected>Any deadline</option>
-      <option value="7">7</option><option value="14">14</option><option value="30">30</option>
-    </select>
-    <input id="lbDeadlineAfter" type="hidden" />
-    <input id="lbDeadlineBefore" type="hidden" />
-    <input id="lbQ" type="hidden" />
-    <select id="lbSort" hidden aria-hidden="true">
-      <option value="deadline" selected>deadline</option>
-    </select>
-    <input id="lbSource" type="hidden" />         {# retained container id so existing code doesn't NPE; empty by design #}
-    <button id="lbResetBtn" type="button" hidden aria-hidden="true"></button>
-  </section>
-
-  {# Source facet still needs SOMEWHERE — hidden container so loadLiveBidsFacets
-     doesn't crash. In the pillbox model, Source is de-emphasised (charts +
-     Category cover the common cases); if you want it back visibly, we can add
-     a 4th pill segment or a "More filters" affordance. #}
+  {# Hidden container so loadLiveBidsFacets can still write the Source
+     checklist (used by the column-header filter popover). #}
   <div id="lbSourceHidden" hidden>
     <div id="lbSource"></div>
   </div>
 
-  {# ============================== Table ================================== #}
+  {# ============================== Table ==================================
+     Column headers carry sort buttons (cycle asc → desc → default) AND
+     filter buttons that open the shared #colPop popover. The popover binds
+     to the SAME hidden inputs the pillbox uses — one source of truth. #}
   <section class="panel">
     <div class="panel__head">
       <div class="panel__title">Open tenders</div>
@@ -165,16 +185,46 @@
       <table class="tenders">
         <thead>
           <tr>
-            <th scope="col">Title</th>
-            <th scope="col">Buyer</th>
-            <th scope="col">Category</th>
-            <th scope="col" class="num">Value</th>
-            <th scope="col">Deadline</th>
-            <th scope="col">Source</th>
+            <th class="col-h" data-col="title" scope="col">
+              <button class="col-sort" data-col="title" aria-label="Sort by title">Title <span class="col-arrow" aria-hidden="true"></span></button>
+              <button class="col-filter" data-col="title" data-kind="search" aria-label="Filter title or buyer" title="Filter title / buyer">⌕</button>
+            </th>
+            <th class="col-h" data-col="buyer" scope="col">
+              <button class="col-sort" data-col="buyer" aria-label="Sort by buyer">Buyer <span class="col-arrow" aria-hidden="true"></span></button>
+              <button class="col-filter" data-col="buyer" data-kind="search" aria-label="Filter title or buyer" title="Filter title / buyer">⌕</button>
+            </th>
+            <th class="col-h" data-col="category" scope="col">
+              <button class="col-sort" data-col="category" aria-label="Sort by category">Category <span class="col-arrow" aria-hidden="true"></span></button>
+              <button class="col-filter" data-col="category" data-kind="checklist" aria-label="Filter categories" title="Filter categories">▾</button>
+            </th>
+            <th class="col-h num" data-col="value" scope="col">
+              <button class="col-sort" data-col="value" aria-label="Sort by value">Value <span class="col-arrow" aria-hidden="true"></span></button>
+              <button class="col-filter" data-col="value" data-kind="range" aria-label="Filter by value range" title="Filter by value">▾</button>
+            </th>
+            <th class="col-h" data-col="deadline" scope="col">
+              <button class="col-sort" data-col="deadline" aria-label="Sort by deadline">Deadline <span class="col-arrow" aria-hidden="true"></span></button>
+              <button class="col-filter" data-col="deadline" data-kind="daterange" aria-label="Filter by deadline" title="Filter by deadline">▾</button>
+            </th>
+            <th class="col-h" data-col="source" scope="col">
+              <button class="col-sort" data-col="source" aria-label="Sort by source">Source <span class="col-arrow" aria-hidden="true"></span></button>
+              <button class="col-filter" data-col="source" data-kind="checklist" aria-label="Filter sources" title="Filter sources">▾</button>
+            </th>
           </tr>
         </thead>
         <tbody id="lbBody"><tr><td colspan="6" class="center muted">Loading…</td></tr></tbody>
       </table>
+
+      {# Column filter popover (positioned + populated by filters.js).
+         Shared between Search and Live bids; the live-bids variant of the
+         wire function binds the popover to the #lb* hidden inputs. #}
+      <div id="colPop" class="col-pop" hidden>
+        <div class="col-pop__title"></div>
+        <div class="col-pop__body"></div>
+        <div class="col-pop__actions">
+          <button type="button" class="btn btn--secondary btn--sm" data-pop="clear">Clear</button>
+          <button type="button" class="btn btn--primary  btn--sm" data-pop="apply">Apply</button>
+        </div>
+      </div>
     </div>
   </section>
 

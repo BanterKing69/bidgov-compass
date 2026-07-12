@@ -1090,6 +1090,39 @@ body.app-shell {
 }
 .lb-pillbox:hover { box-shadow: var(--shadow-3); }
 
+/* Wide variant — top-of-page hero pillbox on Live Bids. Fills the
+   full flex column cross-axis so the search dominates the fold.
+   `align-self: stretch` is explicit here because in a column-flex parent
+   an `auto` cross-axis margin (used by the base `.lb-pillbox` for
+   centering) would otherwise disable stretch and shrink the pillbox to
+   its content width. Explicit stretch + `margin-inline: 0` restores the
+   expected full-width behaviour on wide screens. */
+.lb-pillbox--wide {
+  align-self: stretch;
+  width: auto;
+  max-width: none;
+  padding: 8px;
+  margin: var(--space-md) 0 var(--space-lg);
+}
+.lb-pillbox--wide .lb-pill__summary { padding: 14px 28px; }
+.lb-pillbox--wide .lb-pill__search { width: 56px; height: 56px; margin-left: 8px; }
+.lb-pillbox--wide .lb-pill__search svg { width: 24px; height: 24px; }
+.lb-pillbox--wide .lb-pill__label { font-size: 12px; }
+.lb-pillbox--wide .lb-pill__value { font-size: 14px; }
+
+/* Compact page-header for Live bids — the pillbox above owns the visual
+   weight, so the H1 shrinks to a quiet identity row. */
+.page-header--compact {
+  padding-top: 0;
+  padding-bottom: var(--space-sm);
+  margin-bottom: var(--space-sm);
+  border-bottom: none;
+}
+.page-header--compact .page-header__title {
+  font-size: 20px;
+  font-weight: 600;
+}
+
 .lb-pill {
   position: relative;
   flex: 1 1 0;
@@ -1277,16 +1310,6 @@ body.app-shell {
   transition: box-shadow var(--dur-fast) var(--ease), transform var(--dur-fast) var(--ease);
 }
 .lb-fcard:hover { box-shadow: var(--shadow-2); transform: translateY(-2px); }
-.lb-fcard__badge {
-  position: absolute; top: 12px; right: 12px;
-  padding: 3px 8px;
-  background: var(--bid);
-  color: #fff;
-  font-size: 10px; font-weight: 700;
-  letter-spacing: .04em;
-  text-transform: uppercase;
-  border-radius: var(--radius-pill);
-}
 .lb-fcard__title {
   margin: 0;
   font-family: var(--f-head);
@@ -1294,7 +1317,6 @@ body.app-shell {
   font-weight: 600;
   line-height: 1.3;
   color: var(--gov-strong);
-  padding-right: 60px;                             /* room for the badge */
   display: -webkit-box;
   -webkit-line-clamp: 3; -webkit-box-orient: vertical;
   overflow: hidden;

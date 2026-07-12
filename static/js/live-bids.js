@@ -10,8 +10,9 @@ import { upsertChart } from './charts.js';
 import {
   loadLiveBidsFacets, loadLiveBidsFromUrl, pushLiveBidsUrlState,
   buildLiveBidsQuery, wireLiveBidsFilters,
+  wireLiveBidsColumnPopovers, paintLiveBidsFilterActive,
 } from './filters.js';
-import { renderTenderTable, renderTableFoot, wireTrackButtons } from './table.js';
+import { renderTenderTable, renderTableFoot, wireTrackButtons, wireHeaderSort } from './table.js';
 
 let refreshTimer = null;
 function refresh(delay = 0) {
@@ -49,12 +50,13 @@ function renderFeaturedCard(t) {
   const dlAbs = t.deadline ? fmtDate(t.deadline) : '';
   const dlRel = fmtRelDeadline(t.deadline);
   const value = t.value_amount != null ? fmtGBP(t.value_amount) : '–';
-  const isSweet = t.is_sweet === 1;
+  // `is_sweet` still drives the server-side ranking (sweet-spot cards land
+  // first), but we no longer render a visual "Sweet-spot" badge — the row's
+  // ordering is signal enough and the badge was visual noise.
   const link = t.notice_url
     ? `<a href="${escapeHtml(t.notice_url)}" target="_blank" rel="noopener" title="Open notice on source portal">${escapeHtml(t.title || '')}</a>`
     : escapeHtml(t.title || '');
   return `<article class="lb-fcard" role="listitem">
-    ${isSweet ? '<span class="lb-fcard__badge">Sweet-spot</span>' : ''}
     <h3 class="lb-fcard__title">${link}</h3>
     <p class="lb-fcard__buyer">${escapeHtml(t.buyer_name || '')}</p>
     ${t.category ? `<span class="lb-fcard__cat">${escapeHtml(t.category)}</span>` : ''}
@@ -79,7 +81,8 @@ async function refreshKpis() {
   $('#lbKpiMedian').title        = (s.median_value || 0).toLocaleString('en-GB', { style: 'currency', currency: 'GBP' });
   $('#lbKpiClosing').textContent = fmtInt(s.closing_7d);
   renderOverviewCharts(s);
-  paintPillboxSummaries();     // sync Category/Size/Deadline pillbox labels
+  paintPillboxSummaries();          // sync Category/Size/Deadline pillbox labels
+  paintLiveBidsFilterActive();      // sync column-header filter-icon active state
 }
 
 /** Update the human-readable summary strings on each pill segment so the
@@ -260,7 +263,7 @@ function renderOverviewCharts(s) {
     options: {
       responsive: true, maintainAspectRatio: false, cutout: '55%',
       plugins: {
-        title: { display: true, text: 'By category · click a slice to filter',
+        title: { display: true, text: 'By category',
                  font: { family: 'Poppins', weight: '600', size: 13 } },
         legend: { position: 'right', labels: { boxWidth: 10, padding: 6, font: { size: 10 } } },
       },
@@ -292,7 +295,7 @@ function renderOverviewCharts(s) {
     options: {
       responsive: true, maintainAspectRatio: false,
       plugins: {
-        title: { display: true, text: 'Deadline distribution · click a bar to filter',
+        title: { display: true, text: 'Deadline distribution',
                  font: { family: 'Poppins', weight: '600', size: 13 } },
         legend: { display: false },
       },
@@ -329,7 +332,7 @@ function renderOverviewCharts(s) {
     options: {
       responsive: true, maintainAspectRatio: false,
       plugins: {
-        title: { display: true, text: 'Contract value distribution · click a bar to filter',
+        title: { display: true, text: 'Contract value distribution',
                  font: { family: 'Poppins', weight: '600', size: 13 } },
         legend: { display: false },
       },
@@ -418,10 +421,27 @@ async function boot() {
   loadLiveBidsFromUrl();
   wireLiveBidsFilters(refresh);
   wirePillboxPresets();                   // Size + Deadline preset button wiring (Phase 6c)
+  wireHeaderSort(refresh, '#lbSort');     // Column header sort cycle (asc → desc → default)
+  wireLiveBidsColumnPopovers(refresh);    // Column header filter popovers (bind to #lb* inputs)
   wireEmptyStateClear();
   wireTrackButtons('#lbBody');            // admin-only Save-deal button on rows
+  // Keep column-filter icon active state in sync with any surface that
+  // changes the hidden inputs (pillbox click, chart click, popover apply,
+  // reset button, URL hydration). The popover apply/clear paths already
+  // call this; the delegated listener below covers everything else.
+  document.body.addEventListener('change', e => {
+    if (e.target.matches('#lbCategory input, #lbSource input, ' +
+                         '#lbMin, #lbMax, #lbDeadlineAfter, #lbDeadlineBefore, ' +
+                         '#lbDeadlineWindow, #lbQ')) {
+      paintLiveBidsFilterActive();
+    }
+  });
   refresh();                              // debounced internally; no promise to await
-  window.addEventListener('popstate', () => { loadLiveBidsFromUrl(); refresh(); });
+  window.addEventListener('popstate', () => {
+    loadLiveBidsFromUrl();
+    paintLiveBidsFilterActive();
+    refresh();
+  });
 }
 
 boot().catch(err => {

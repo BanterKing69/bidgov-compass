@@ -171,10 +171,15 @@ export function wireSearchFilters(refresh) {
 }
 
 /* ==========================================================================
-   Search column popovers — Excel-style per-column filter/sort UI
-   Reuses the SAME hidden filter inputs the sidebar drives, so opening a
-   popover, ticking a box, and hitting Apply is exactly equivalent to using
-   the sidebar. One source of truth.
+   Column popovers — Excel-style per-column filter/sort UI
+   Reuses the SAME hidden filter inputs the sidebar / pillbox drives, so
+   opening a popover, ticking a box, and hitting Apply is exactly
+   equivalent to using the other surface. One source of truth.
+
+   Factored around a `config` object mapping abstract filter names to
+   concrete DOM selectors, so the SAME popover code powers both:
+     * Search  (`/`)         — inputs live in the left sidebar (#flt*)
+     * Live bids (`/live-bids`) — inputs live in the pillbox (#lb*)
    ========================================================================== */
 
 function positionPop(pop, anchorBtn) {
@@ -194,7 +199,7 @@ function closePop() {
   pop._openFor = null;
 }
 
-async function openPop(anchorBtn) {
+async function openPop(anchorBtn, cfg) {
   const pop = $('#colPop');
   if (pop._openFor === anchorBtn) { closePop(); return; }
 
@@ -209,7 +214,7 @@ async function openPop(anchorBtn) {
     bodyEl.innerHTML = `
       <input type="text" class="field" id="popSearch" placeholder="Contains…" />
       <div class="col-pop__meta">Filters title AND buyer (global search).</div>`;
-    bodyEl.querySelector('#popSearch').value = $('#fltQ').value;
+    bodyEl.querySelector('#popSearch').value = $(cfg.q).value;
     setTimeout(() => bodyEl.querySelector('#popSearch').focus(), 30);
     bodyEl.querySelector('#popSearch').addEventListener('keydown', e => {
       if (e.key === 'Enter') { e.preventDefault(); pop.querySelector('[data-pop="apply"]').click(); }
@@ -218,9 +223,9 @@ async function openPop(anchorBtn) {
   else if (kind === 'checklist') {
     const facets = await getFacets();
     const items  = col === 'category' ? facets.categories : facets.sources;
-    const sidebarSel = col === 'category' ? '#fltCategory' : '#fltSource';
+    const box    = col === 'category' ? cfg.cats : cfg.srcs;
     const checked = new Set(
-      $$(`${sidebarSel} input:checked`).map(el => el.value)
+      $$(`${box} input:checked`).map(el => el.value)
     );
     bodyEl.innerHTML = `
       <input type="text" class="field" id="popFind" placeholder="Search…" />
@@ -260,8 +265,8 @@ async function openPop(anchorBtn) {
         <a href="#" data-pop-band="sweet">£50k–£300k</a> ·
         <a href="#" data-pop-band="mid">£30k–£135k</a>
       </div>`;
-    bodyEl.querySelector('#popMin').value = $('#fltMin').value;
-    bodyEl.querySelector('#popMax').value = $('#fltMax').value;
+    bodyEl.querySelector('#popMin').value = $(cfg.min).value;
+    bodyEl.querySelector('#popMax').value = $(cfg.max).value;
     bodyEl.addEventListener('click', e => {
       if (!e.target.matches('[data-pop-band]')) return;
       e.preventDefault();
@@ -282,8 +287,8 @@ async function openPop(anchorBtn) {
         <a href="#" data-pop-dl="week">Closing this week</a> ·
         <a href="#" data-pop-dl="month">This month</a>
       </div>`;
-    bodyEl.querySelector('#popAfter').value  = $('#fltAfter').value;
-    bodyEl.querySelector('#popBefore').value = $('#fltBefore').value;
+    bodyEl.querySelector('#popAfter').value  = $(cfg.after).value;
+    bodyEl.querySelector('#popBefore').value = $(cfg.before).value;
     bodyEl.addEventListener('click', e => {
       if (!e.target.matches('[data-pop-dl]')) return;
       e.preventDefault();
@@ -302,53 +307,62 @@ async function openPop(anchorBtn) {
   positionPop(pop, anchorBtn);
 }
 
-function applyPop(refresh) {
+function applyPop(refresh, cfg) {
   const pop = $('#colPop');
   const col  = pop.dataset.col;
   const kind = pop.dataset.kind;
 
   if (kind === 'search') {
-    $('#fltQ').value = pop.querySelector('#popSearch').value.trim();
+    $(cfg.q).value = pop.querySelector('#popSearch').value.trim();
   }
   else if (kind === 'checklist') {
     const wanted = new Set(
       $$('#popList input:checked').map(el => el.value)
     );
-    const sidebarSel = col === 'category' ? '#fltCategory' : '#fltSource';
-    $$(`${sidebarSel} input`).forEach(el => { el.checked = wanted.has(el.value); });
+    const box = col === 'category' ? cfg.cats : cfg.srcs;
+    $$(`${box} input`).forEach(el => { el.checked = wanted.has(el.value); });
   }
   else if (kind === 'range') {
-    $('#fltMin').value = pop.querySelector('#popMin').value;
-    $('#fltMax').value = pop.querySelector('#popMax').value;
+    $(cfg.min).value = pop.querySelector('#popMin').value;
+    $(cfg.max).value = pop.querySelector('#popMax').value;
   }
   else if (kind === 'daterange') {
-    $('#fltAfter').value  = pop.querySelector('#popAfter').value;
-    $('#fltBefore').value = pop.querySelector('#popBefore').value;
+    $(cfg.after).value  = pop.querySelector('#popAfter').value;
+    $(cfg.before).value = pop.querySelector('#popBefore').value;
+    if (typeof cfg.onDateRangeApply === 'function') cfg.onDateRangeApply();
   }
   closePop();
-  paintFilterActive();
+  if (typeof cfg.paintActive === 'function') cfg.paintActive();
   refresh();
 }
 
-function clearPop(refresh) {
+function clearPop(refresh, cfg) {
   const pop = $('#colPop');
   const col  = pop.dataset.col;
   const kind = pop.dataset.kind;
-  if (kind === 'search')        $('#fltQ').value = '';
+  if (kind === 'search')        $(cfg.q).value = '';
   else if (kind === 'checklist') {
-    const sidebarSel = col === 'category' ? '#fltCategory' : '#fltSource';
-    $$(`${sidebarSel} input`).forEach(el => { el.checked = false; });
+    const box = col === 'category' ? cfg.cats : cfg.srcs;
+    $$(`${box} input`).forEach(el => { el.checked = false; });
   }
-  else if (kind === 'range')     { $('#fltMin').value = ''; $('#fltMax').value = ''; }
-  else if (kind === 'daterange') { $('#fltAfter').value = ''; $('#fltBefore').value = ''; }
+  else if (kind === 'range')     { $(cfg.min).value = ''; $(cfg.max).value = ''; }
+  else if (kind === 'daterange') {
+    $(cfg.after).value = ''; $(cfg.before).value = '';
+    if (typeof cfg.onDateRangeApply === 'function') cfg.onDateRangeApply();
+  }
   closePop();
-  paintFilterActive();
+  if (typeof cfg.paintActive === 'function') cfg.paintActive();
   refresh();
 }
 
-export function wireColumnPopovers(refresh) {
+/** Wire column-filter popovers. `cfg` maps abstract filter names to concrete
+ *  DOM selectors. `onDateRangeApply` is an optional hook the caller can
+ *  attach to clear a coexisting cumulative-window select after the user
+ *  applies an exact-range from the popover (Live bids uses this to clear
+ *  #lbDeadlineWindow when the popover sets deadlineAfter/Before). */
+function wirePopovers(refresh, cfg) {
   $$('.col-filter').forEach(btn => {
-    btn.addEventListener('click', e => { e.stopPropagation(); openPop(btn); });
+    btn.addEventListener('click', e => { e.stopPropagation(); openPop(btn, cfg); });
   });
   document.addEventListener('click', e => {
     const pop = $('#colPop');
@@ -361,10 +375,65 @@ export function wireColumnPopovers(refresh) {
     if (e.key === 'Escape') closePop();
   });
   $('#colPop').addEventListener('click', e => {
-    if (e.target.matches('[data-pop="apply"]')) applyPop(refresh);
-    if (e.target.matches('[data-pop="clear"]')) clearPop(refresh);
+    if (e.target.matches('[data-pop="apply"]')) applyPop(refresh, cfg);
+    if (e.target.matches('[data-pop="clear"]')) clearPop(refresh, cfg);
   });
-  paintFilterActive();
+  if (typeof cfg.paintActive === 'function') cfg.paintActive();
+}
+
+/** Search page (`/`) — sidebar-backed column popovers. */
+export function wireColumnPopovers(refresh) {
+  wirePopovers(refresh, {
+    q: '#fltQ',
+    cats: '#fltCategory',
+    srcs: '#fltSource',
+    min: '#fltMin', max: '#fltMax',
+    after: '#fltAfter', before: '#fltBefore',
+    paintActive: paintFilterActive,
+  });
+}
+
+/** Live bids page (`/live-bids`) — pillbox-backed column popovers.
+ *  Binds to the same hidden inputs the pillbox controls. When the user
+ *  sets an exact deadline range from the header popover, we also clear
+ *  the cumulative #lbDeadlineWindow select so the two modes don't fight
+ *  (mirrors the chart-click cross-filter behaviour). */
+export function wireLiveBidsColumnPopovers(refresh) {
+  wirePopovers(refresh, {
+    q: '#lbQ',
+    cats: '#lbCategory',
+    srcs: '#lbSource',
+    min: '#lbMin', max: '#lbMax',
+    after: '#lbDeadlineAfter', before: '#lbDeadlineBefore',
+    onDateRangeApply: () => {
+      const w = $('#lbDeadlineWindow');
+      if (w) w.value = '';
+    },
+    paintActive: paintLiveBidsFilterActive,
+  });
+}
+
+/** Highlight column-header filter icons for Live bids based on hidden
+ *  input state. Called after every apply/clear so icons reflect state
+ *  set by ANY surface (pillbox, chart click, or popover). */
+export function paintLiveBidsFilterActive() {
+  const q = $('#lbQ')?.value.trim() || '';
+  const cats = $$('#lbCategory input:checked').length;
+  const srcs = $$('#lbSource input:checked').length;
+  const vmin = $('#lbMin')?.value || '', vmax = $('#lbMax')?.value || '';
+  const dlA  = $('#lbDeadlineAfter')?.value || '';
+  const dlB  = $('#lbDeadlineBefore')?.value || '';
+  const dlW  = $('#lbDeadlineWindow')?.value || '';
+  const active = {
+    title:    !!q, buyer: !!q,
+    category: cats > 0,
+    source:   srcs > 0,
+    value:    !!(vmin || vmax),
+    deadline: !!(dlA || dlB || dlW),
+  };
+  $$('.col-filter').forEach(btn => {
+    btn.classList.toggle('is-active', !!active[btn.dataset.col]);
+  });
 }
 
 /* ==========================================================================

@@ -200,7 +200,7 @@ def _load_user(user_id: str):
 @auth_bp.route("/login", methods=["GET", "POST"])
 def login():
     if current_user.is_authenticated:
-        return redirect(url_for("home"))
+        return redirect(url_for("live_bids"))
     if request.method == "POST":
         email = request.form.get("email", "").strip()
         password = request.form.get("password", "")
@@ -231,7 +231,7 @@ def login():
 @auth_bp.route("/signup", methods=["GET", "POST"])
 def signup():
     if current_user.is_authenticated:
-        return redirect(url_for("home"))
+        return redirect(url_for("live_bids"))
     if not signup_allowed():
         # Friendly "invite-only" page — same template, just a flag it reads.
         return render_template("signup.html", email="", name="",
@@ -250,7 +250,7 @@ def signup():
             return render_template("signup.html", email=email, name=name), 400
         login_user(user)
         touch_last_login(user.id)
-        return redirect(url_for("home"))
+        return redirect(url_for("live_bids"))
     return render_template("signup.html", email="", name="")
 
 
