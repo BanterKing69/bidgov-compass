@@ -6,7 +6,7 @@ every notice against the GovBid *sweet-spot* strategy, and serves a branded
 dashboard with filters, pivots, charts, and a natural-language chat over the
 data.
 
-Ships with a live SQLite store of **5,287 notices** (~544 currently open) so
+Ships with a live SQLite store of **9,199 notices** (~540 currently open) so
 the dashboard has real data on first launch.
 
 ## Deploy your own copy
@@ -38,6 +38,73 @@ SESSION_COOKIE_SECURE=1        # cookies over HTTPS only
 ```
 
 Both are set automatically by `render.yaml` on first deploy.
+
+### Portal IA & roles (2026-07 refactor — feat/portal-ia)
+
+Five icon-rail routes, split by audience:
+
+| Rail icon | Route | Access | What it does |
+|---|---|---|---|
+| Live bids | `/live-bids` | any user | Open tenders only, urgency-forward (deadline ≤7d in red). Server-locked `deadline >= now` — the "is_open" flag goes stale between scrapes, so we compare deadlines at query time. |
+| Won contracts | `/awards` | any user | Awarded contracts view. Real supplier data. |
+| Search | `/` | any user | Full explorer: sidebar filters, Table · Pivot · Ask-the-data tabs, Excel-style column popovers, shareable filter URLs (state mirrored to `?query`). |
+| Dashboard | `/dashboard` | any user | KPIs + five Chart.js charts. "Closing ≤7 days" is red. |
+| Admin | `/admin` | `is_admin=1` only | Sales console. Icon is server-side conditional — non-admins never see it. |
+
+Post-login default landing: **`/live-bids`** (highest signal per screen; explicit `?next=/foo` still honoured).
+
+### Admin console (`/admin` — `is_admin` only)
+
+Single page, four tabs, wired in `static/js/admin.js`:
+
+- **Overview** — fee economics computed from the pipeline table joined against tenders.db (see next section). One bar chart, Chart.js.
+- **Pipeline** — deal-tracking CRUD (inline stage/client editing, add-by-search, `Track` action on tender rows). CSV export includes fee columns; **fee data exists only under `/admin`**.
+- **Users** — list + activate/deactivate/promote/demote/delete. Cannot act on your own account. Cannot demote/deactivate/delete the last active admin.
+- **Data ops** — relocated Scrape modal + live log tail (`POST /api/scrape`, `GET /api/scrape/status`) and Excel/CSV bulk Export (`GET /api/export`) with a scope picker (Live tenders / All tenders / Awards). All three endpoints are `admin_required` — non-admins get JSON 403.
+
+### Pipeline & fee model (Phase 4)
+
+New table in **`users.db`** (never `tenders.db` — keeps fee data out of the chat-queryable connection by construction):
+
+```sql
+CREATE TABLE IF NOT EXISTS pipeline (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  tender_uid TEXT NOT NULL UNIQUE,          -- FK by convention → tenders.uid
+  client_name TEXT NOT NULL,
+  stage TEXT NOT NULL DEFAULT 'qualified',  -- qualified|quoted|writing|submitted|won|lost
+  fee_upfront REAL NOT NULL DEFAULT 1500,
+  fee_success_pct REAL NOT NULL DEFAULT 5.0,
+  outcome_value REAL,
+  notes TEXT,
+  created_at TEXT NOT NULL, updated_at TEXT NOT NULL
+);
+```
+
+Success fee = `fee_success_pct% × coalesce(outcome_value, tender.value)`. Expected £/deal = `1500 + 5% × value × win_rate(category)`. The 30-category win-rate map is embedded in [`pipeline.py`](pipeline.py) verbatim from `Tender_Analysis.xlsx` (sheet "Sweet Spot"); unmapped categories default to 0.15. Tweaking the map is a code edit — no data migration.
+
+Two-DB join: pipeline rows are augmented at read time with tender info via a **separate short-lived connection** to `tenders.db`. Never `ATTACH` — that would expose pipeline to chat's SQL gate.
+
+### CSRF (Phase 4)
+
+`Flask-WTF`'s `CSRFProtect` is enabled app-wide. Every non-GET request must include an `X-CSRFToken` header (JSON APIs, via `static/js/api.js` — read from the `<meta name="csrf-token">` tag baked into `_app_base.html`) **or** a `csrf_token` form field (auth forms — hidden input rendered by `{{ csrf_token() }}`). `/health` is GET, unaffected. State-changing POST without the token → 400.
+
+### Environment flags added by this refactor
+
+- `ALLOW_SIGNUP` (default `"1"`) — set to `"0"` / `"false"` / `"no"` / `"off"` to close open registration. `/auth/signup` returns 403 with a friendly "invite-only" page, and the "Create an account" link disappears from `/auth/login`. Bypassed automatically when the users table is empty, so first-registrant bootstrap always works.
+- `SECRET_KEY`, `SESSION_COOKIE_SECURE` — as before. `SESSION_COOKIE_SAMESITE` is set to `Lax` in code.
+
+### Render free-tier caveat (⚠ before real client use)
+
+Render's free instance has **no persistent disk** — the container's local filesystem is wiped on every redeploy/restart. That means `data/users.db` (which holds **user accounts *and* the pipeline table**) is **lost on redeploy**. This is fine for prototype / demo use; before onboarding paying clients, either:
+
+1. Move to a Render paid tier with an attached persistent disk, or
+2. Move `users.db` contents to a hosted DB (Neon, Supabase, PlanetScale, etc.) and swap `auth._conn()` + `pipeline._conn()` to point at it.
+
+The tenders store (`data/tenders.db`) also lives on the ephemeral disk but ships in the repo and can be re-scraped from source at any time (Admin → Data ops → Scrape now).
+
+### Tests
+
+`pytest tests/` (25 tests, ~2s): access matrix (anon/user/admin × client/admin surfaces), self-action guards, last-admin guard, pipeline CRUD round-trip, fee-economics equal to hand-computed reference on real DB values, CSRF gate, chat isolation (pipeline absent from tenders.db + chat body never contains sensitive pipeline data). `pytest` is in `requirements.txt` but the app never imports it.
 
 ---
 
