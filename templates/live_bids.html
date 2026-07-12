@@ -6,6 +6,11 @@
 
 {% block title %}Live bids · BidGov Compass{% endblock %}
 
+{% block page_head %}
+  <!-- Chart.js — the three overview charts above the table -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+{% endblock %}
+
 {% block content %}
 
 <header class="page-header">
@@ -35,6 +40,19 @@
       <div class="kpi__delta muted">Need attention this week</div>
     </div>
   </div>
+
+  {# ============================== Overview charts (Phase 5 addition) ===== #}
+  <section class="panel lb-charts">
+    <div class="panel__head">
+      <div class="panel__title">Overview</div>
+      <div class="panel__meta">Live tenders only · updates with filters</div>
+    </div>
+    <div class="lb-charts__grid">
+      <div class="chart-wrap chart-wrap--sm"><canvas id="lbChartCategory"></canvas></div>
+      <div class="chart-wrap chart-wrap--sm"><canvas id="lbChartDeadline"></canvas></div>
+      <div class="chart-wrap chart-wrap--sm"><canvas id="lbChartValue"></canvas></div>
+    </div>
+  </section>
 
   {# ============================== Filter bar ============================= #}
   <section class="lb-filterbar panel" aria-label="Filters">

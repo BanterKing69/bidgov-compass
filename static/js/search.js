@@ -8,6 +8,7 @@
 
 import { $, $$, escapeHtml, fmtGBP, fmtGBPFull, fmtInt, fmtDate, C } from './fmt.js';
 import { api } from './api.js';
+import { upsertChart } from './charts.js';
 import {
   loadFacets, wireSearchFilters, wireColumnPopovers,
   loadSearchFromUrl, pushSearchUrlState, buildSearchQuery, paintFilterActive,
@@ -15,15 +16,16 @@ import {
 import {
   renderTenderTable, renderTableFoot, wireHeaderSort, wireTrackButtons,
 } from './table.js';
+import { initValueSlider } from './value-slider.js';
 
-/* ---- Refresh cycle: sync URL, refetch table (+ pivot if visible) --------- */
+/* ---- Refresh cycle: sync URL, refetch table (+ groupby if visible) ------ */
 let refreshTimer = null;
 function refresh(delay = 0) {
   clearTimeout(refreshTimer);
   refreshTimer = setTimeout(async () => {
     pushSearchUrlState();
     await refreshTable();
-    if ($('#tab-pivot').classList.contains('is-active')) refreshPivot();
+    if ($('#tab-pivot').classList.contains('is-active')) refreshGroupby();
   }, delay);
 }
 
@@ -42,22 +44,127 @@ async function refreshTable() {
   renderTableFoot($('#tblFoot'), r.returned, r.total);
 }
 
-/* ---- Pivot -------------------------------------------------------------- */
-async function refreshPivot() {
+/* ---- Group-by tab (Phase 5 — replaces jQuery drag-drop pivot) ----------- */
+// One-dimension GROUP BY via /api/aggregate + Chart.js bar chart. Click any
+// bar OR any table row to APPLY that value as a filter on the sidebar and
+// jump back to the Table tab — pivot becomes an exploration jumping-off
+// point instead of a dead-end summary.
+
+const GROUPBY_DIM_TO_FILTER = {
+  // Which sidebar filter to set when a group is clicked.
+  //   'checkbox' → check the matching checklist entry inside #fltCategory/#fltSource
+  //   'query'    → put the value in #fltQ (used for buyer/region since they're free-text)
+  //   'noop'     → drill isn't meaningful for this dimension (e.g. value_band already IS the filter)
+  category:       { kind: 'checkbox', boxSel: '#fltCategory' },
+  source:         { kind: 'checkbox', boxSel: '#fltSource' },
+  buyer:          { kind: 'query',    inputSel: '#fltQ' },
+  region:         { kind: 'query',    inputSel: '#fltQ' },
+  deadline_month: { kind: 'noop' },
+  value_band:     { kind: 'noop' },
+};
+
+const GROUPBY_DIM_LABEL = {
+  category: 'Category', buyer: 'Buyer', source: 'Source',
+  region: 'Region', deadline_month: 'Deadline month', value_band: 'Value band',
+};
+
+async function refreshGroupby() {
   const p = buildSearchQuery();
-  const r = await api('/api/pivot?' + p.toString());
+  const dim = $('#grpDim').value;
+  const metric = $('#grpMetric').value;
+  p.set('group_by', dim);
+  p.set('metric', metric);
+  const r = await api('/api/aggregate?' + p.toString());
   if (!r) return;
-  const records = r.rows.map(row => {
-    const o = {}; r.columns.forEach((c, i) => o[c] = row[i]); return o;
+
+  const isCount = metric === 'count';
+  const fmtVal = isCount ? fmtInt : fmtGBP;
+
+  // ---- Table ----
+  $('#grpDimHead').textContent = GROUPBY_DIM_LABEL[dim];
+  $('#grpValHead').textContent = r.metric_label;
+  const tbody = $('#grpBody');
+  if (!r.rows.length) {
+    tbody.innerHTML = '<tr><td colspan="2" class="center muted">No matching rows.</td></tr>';
+  } else {
+    tbody.innerHTML = r.rows.map(row => `
+      <tr data-group-value="${escapeHtml(String(row.k ?? ''))}" class="groupby-row" tabindex="0">
+        <td>${escapeHtml(String(row.k ?? '(none)'))}</td>
+        <td class="num" title="${escapeHtml(fmtGBPFull(row.v))}">${fmtVal(row.v)}</td>
+      </tr>
+    `).join('');
+  }
+
+  // ---- Chart (top 15) ----
+  const top = r.rows.slice(0, 15);
+  upsertChart('grpChart', {
+    type: 'bar',
+    data: {
+      labels: top.map(x => String(x.k ?? '(none)')),
+      datasets: [{
+        label: r.metric_label,
+        data: top.map(x => x.v),
+        backgroundColor: C.gov,
+        borderRadius: 4,
+      }],
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: {
+        title: { display: true, text: `${GROUPBY_DIM_LABEL[dim]} · ${r.metric_label} (top 15)`,
+                 font: { family: 'Poppins', weight: '600', size: 13 } },
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            label: ctx => isCount ? fmtInt(ctx.raw) : fmtGBPFull(ctx.raw),
+          },
+        },
+      },
+      scales: {
+        x: { grid: { display: false },
+             ticks: { autoSkip: false, maxRotation: 45, minRotation: 30, font: { size: 10 } } },
+        y: { grid: { color: C.line }, ticks: { callback: v => fmtVal(v) } },
+      },
+      onClick(_evt, elements, chart) {
+        if (!elements.length) return;
+        const idx = elements[0].index;
+        applyGroupbyDrill(chart.data.labels[idx]);
+      },
+    },
   });
-  $('#pivotOut').innerHTML = '';
-  // eslint-disable-next-line no-undef
-  $('#pivotOut')._pivotInstance = null;
-  window.jQuery('#pivotOut').pivotUI(records, {
-    rows: ['category'], cols: ['source'],
-    aggregatorName: 'Count', rendererName: 'Table',
-    unusedAttrsVertical: false,
-  }, true);
+}
+
+/** Apply a Group-by value as a Search filter and jump to the Table tab. */
+function applyGroupbyDrill(value) {
+  const dim = $('#grpDim').value;
+  const behaviour = GROUPBY_DIM_TO_FILTER[dim];
+  if (!behaviour || behaviour.kind === 'noop') return;
+  if (behaviour.kind === 'checkbox') {
+    // Uncheck others first — a single click should filter to JUST that value.
+    $$(`${behaviour.boxSel} input`).forEach(el => {
+      el.checked = (el.value === value);
+    });
+  } else if (behaviour.kind === 'query') {
+    $(behaviour.inputSel).value = value;
+  }
+  activateTab('table');
+  refresh();
+}
+
+function wireGroupby() {
+  ['#grpDim', '#grpMetric'].forEach(sel => {
+    $(sel).addEventListener('change', () => refreshGroupby());
+  });
+  // Table-row clicks are the accessible equivalent of chart-bar clicks
+  $('#grpBody').addEventListener('click', (e) => {
+    const tr = e.target.closest('tr.groupby-row');
+    if (tr) applyGroupbyDrill(tr.dataset.groupValue);
+  });
+  $('#grpBody').addEventListener('keydown', (e) => {
+    if (e.key !== 'Enter') return;
+    const tr = e.target.closest('tr.groupby-row');
+    if (tr) applyGroupbyDrill(tr.dataset.groupValue);
+  });
 }
 
 /* ---- Tabs --------------------------------------------------------------- */
@@ -68,7 +175,7 @@ function activateTab(name) {
   tab.classList.add('tab--active');
   $$('.tab-panel').forEach(pnl => pnl.classList.remove('is-active'));
   $('#tab-' + name).classList.add('is-active');
-  if (name === 'pivot') refreshPivot();
+  if (name === 'pivot') refreshGroupby();
   if (history.replaceState) history.replaceState(null, '', '#' + name);
 }
 function wireTabs() {
@@ -226,10 +333,28 @@ async function boot() {
   wireColumnPopovers(refresh);
   wireEmptyStateClear();
   wireTrackButtons('#tblBody');           // admin-only Track button on rows (Phase 4)
-  await refresh();
+  wireGroupby();                           // Group-by tab controls + drill-through (Phase 5)
+
+  // Airbnb-style value slider — replaces the old #fltMin/#fltMax inputs.
+  // The slider drives those (now hidden) inputs so buildSearchQuery works
+  // unchanged. On every non-value filter change we ALSO refetch the histogram
+  // so the distribution reshapes to reflect the current scope.
+  const refetchHistogram = await initValueSlider(buildSearchQuery, refresh);
+  document.body.addEventListener('change', (e) => {
+    if (e.target.matches('#fltQ, #fltOpen, #fltAfter, #fltBefore, '
+                       + '#fltCategory input, #fltSource input')) {
+      refetchHistogram();
+    }
+  });
+
+  refresh();                               // debounced; no promise to await
   paintFilterActive();
   // Back/forward-button aware
-  window.addEventListener('popstate', () => { loadSearchFromUrl(); refresh(); });
+  window.addEventListener('popstate', () => {
+    loadSearchFromUrl();
+    refetchHistogram();
+    refresh();
+  });
 }
 
 boot().catch(err => {

@@ -329,8 +329,9 @@ def api_live_tenders():
 
 @app.route("/api/live-stats")
 def api_live_stats():
-    """KPI-strip payload for the Live bids page: open count, total open value,
-    closing ≤7d count. Honours the same filter params /api/live-tenders accepts."""
+    """KPI-strip + chart payload for the Live bids page. All aggregates are
+    scoped to live tenders (deadline >= now); honours the same filter params
+    /api/live-tenders accepts."""
     where, params = _build_live_where(request.args)
     conn = db.connect()
     try:
@@ -341,12 +342,144 @@ def api_live_stats():
             f"FROM tenders {where}",
             params,
         ).fetchone()
+        by_category = conn.execute(
+            f"SELECT COALESCE(category,'(unmapped)') AS k, COUNT(*) AS n "
+            f"FROM tenders {where} GROUP BY category ORDER BY n DESC",
+            params,
+        ).fetchall()
+        by_deadline = conn.execute(
+            f"SELECT CASE "
+            f"    WHEN deadline <= datetime('now','+7 days')  THEN '≤7 days' "
+            f"    WHEN deadline <= datetime('now','+14 days') THEN '8–14 days' "
+            f"    WHEN deadline <= datetime('now','+30 days') THEN '15–30 days' "
+            f"    WHEN deadline <= datetime('now','+90 days') THEN '1–3 months' "
+            f"    ELSE '3+ months' END AS k, COUNT(*) AS n "
+            f"FROM tenders {where} GROUP BY k",
+            params,
+        ).fetchall()
+        by_value_band = conn.execute(
+            f"SELECT CASE "
+            f"    WHEN value_amount IS NULL THEN 'Unknown' "
+            f"    WHEN value_amount < 30000  THEN '< £30k' "
+            f"    WHEN value_amount < 135000 THEN '£30k–£135k' "
+            f"    WHEN value_amount < 300000 THEN '£135k–£300k' "
+            f"    WHEN value_amount < 664000 THEN '£300k–£664k' "
+            f"    ELSE '> £664k' END AS k, COUNT(*) AS n "
+            f"FROM tenders {where} GROUP BY k",
+            params,
+        ).fetchall()
     finally:
         conn.close()
     return jsonify({
         "open_count":       row[0] or 0,
         "total_open_value": row[1] or 0,
         "closing_7d":       row[2] or 0,
+        "by_category":      [{"k": r[0], "n": r[1]} for r in by_category],
+        "by_deadline":      [{"k": r[0], "n": r[1]} for r in by_deadline],
+        "by_value_band":    [{"k": r[0], "n": r[1]} for r in by_value_band],
+    })
+
+
+# --------------------------------------------------------------------------- #
+# Group-by aggregation — replaces the drag-drop pivot with a simpler UX.
+# GROUP BY one dimension, one metric, honours the standard filter params.
+# --------------------------------------------------------------------------- #
+_AGG_DIMENSIONS = {
+    "category":       ("COALESCE(category,'(unmapped)')",        None),
+    "buyer":          ("COALESCE(buyer_name,'(unspecified)')",   None),
+    "source":         ("source",                                 None),
+    "region":         ("COALESCE(buyer_region,'(unspecified)')", None),
+    "deadline_month": ("substr(deadline,1,7)",                   "deadline IS NOT NULL"),
+    "value_band":     ("CASE WHEN value_amount IS NULL THEN 'Unknown' "
+                       "WHEN value_amount < 30000 THEN '< £30k' "
+                       "WHEN value_amount < 135000 THEN '£30k–£135k' "
+                       "WHEN value_amount < 300000 THEN '£135k–£300k' "
+                       "WHEN value_amount < 664000 THEN '£300k–£664k' "
+                       "ELSE '> £664k' END", None),
+}
+_AGG_METRICS = {
+    "count":     ("COUNT(*)",                             "notices"),
+    "sum_value": ("ROUND(COALESCE(SUM(value_amount),0))", "sum £"),
+    "avg_value": ("ROUND(AVG(NULLIF(value_amount,0)))",   "avg £"),
+}
+
+
+@app.route("/api/value-histogram")
+def api_value_histogram():
+    """Distribution of tender values across N log-scale bins from £1k to £5M.
+    Powers the Airbnb-style dual-thumb price slider in the Search sidebar.
+    Filter-aware — the histogram reshapes as the user narrows other filters.
+    """
+    where, params = _build_where(request.args)
+    # Log-scale bin edges — 24 bins from £1k to £5M, then one overflow bin for >£5M.
+    # Log scale matches Airbnb's approach (they use log-ish bins for £/night).
+    import math
+    lo, hi, n_bins = 1_000, 5_000_000, 24
+    edges = [round(lo * math.exp(math.log(hi / lo) * i / n_bins))
+             for i in range(n_bins + 1)]
+    # Bin the values in Python (SQLite CASE with 24 branches would be a mess).
+    conn = db.connect()
+    try:
+        cur = conn.execute(
+            f"SELECT value_amount FROM tenders {where} "
+            f"AND value_amount IS NOT NULL AND value_amount > 0",
+            params,
+        )
+        vals = [row[0] for row in cur.fetchall()]
+    finally:
+        conn.close()
+    counts = [0] * (n_bins + 1)  # +1 = overflow bin for >hi
+    for v in vals:
+        if v >= hi:
+            counts[n_bins] += 1
+            continue
+        # binary search for bin index
+        j = 0
+        for i in range(1, len(edges)):
+            if v < edges[i]:
+                j = i - 1
+                break
+        counts[j] += 1
+    bins = []
+    for i in range(n_bins):
+        bins.append({"lo": edges[i], "hi": edges[i + 1], "n": counts[i]})
+    bins.append({"lo": edges[n_bins], "hi": None, "n": counts[n_bins]})  # >£5M
+    return jsonify({
+        "min": edges[0], "max": edges[n_bins],
+        "bins": bins,
+        "matches": sum(counts),
+    })
+
+
+@app.route("/api/aggregate")
+def api_aggregate():
+    """One-dimension GROUP BY over the tenders table, filter-aware."""
+    dim = request.args.get("group_by", "category")
+    metric = request.args.get("metric", "count")
+    if dim not in _AGG_DIMENSIONS:
+        return jsonify({"error": f"unknown group_by; try one of {list(_AGG_DIMENSIONS)}"}), 400
+    if metric not in ("count", "sum_value", "avg_value"):
+        return jsonify({"error": f"unknown metric; try count | sum_value | avg_value"}), 400
+    group_expr, extra_where = _AGG_DIMENSIONS[dim]
+    metric_expr, metric_label = _AGG_METRICS[metric]
+    where, params = _build_where(request.args)
+    if extra_where:
+        where = (where + " AND " if where else "WHERE ") + extra_where
+    order = f"{metric_expr} DESC"
+    limit = min(int(request.args.get("limit", 50)), 500)
+    sql = (f"SELECT {group_expr} AS k, {metric_expr} AS v "
+           f"FROM tenders {where} GROUP BY k ORDER BY {order} LIMIT ?")
+    conn = db.connect()
+    try:
+        cur = conn.execute(sql, [*params, limit])
+        rows = [{"k": r[0], "v": r[1]} for r in cur.fetchall()]
+    finally:
+        conn.close()
+    return jsonify({
+        "group_by": dim,
+        "metric": metric,
+        "metric_label": metric_label,
+        "rows": rows,
     })
 
 

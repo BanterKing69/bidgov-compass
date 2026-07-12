@@ -99,8 +99,19 @@ export async function getFacets() {
   return await loadFacets();
 }
 
+/** Update the small count-bubble next to a collapsed filter group's summary,
+ *  so users can see "3 selected" without expanding. Empty string when zero. */
+function paintCounts() {
+  document.querySelectorAll('.filter-group__count[data-count-for]').forEach(el => {
+    const boxSel = '#' + el.dataset.countFor;
+    const n = document.querySelectorAll(`${boxSel} input:checked`).length;
+    el.textContent = n ? String(n) : '';
+  });
+}
+
 /** Highlight column-header filter icons for columns whose filter is set. */
 export function paintFilterActive() {
+  paintCounts();
   const q = $('#fltQ')?.value.trim() || '';
   const cats = $$('#fltCategory input:checked').length;
   const srcs = $$('#fltSource input:checked').length;

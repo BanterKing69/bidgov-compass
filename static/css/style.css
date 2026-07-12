@@ -227,7 +227,64 @@ input, select, button, textarea { font: inherit; color: inherit; }
 }
 .field:focus { outline: none; border-color: var(--bid); box-shadow: 0 0 0 3px rgba(224,60,49,.12); }
 .field--range { display: flex; align-items: center; gap: 8px; }
-.field--range input { width: 100%; }
+.field--range input { width: 100%; min-width: 0; }   /* min-width:0 lets flex children shrink below their intrinsic date-picker width */
+
+/* In the narrow (280px) sidebar, stack the range inputs vertically so native
+   date pickers don't overflow — WebKit's <input type="date"> has an intrinsic
+   width from its calendar chip UI that flex-shrink alone can't overcome. */
+.sidebar .field--range {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 6px;
+}
+.sidebar .field--range .muted {  /* the em-dash separator */
+  text-align: center;
+  font-size: 11px;
+  line-height: 1;
+}
+
+/* Collapsible filter groups — <details>-based, native, keeps multi-select */
+.filter-group--collapsible { padding: 0; }
+.filter-group__label--summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  cursor: pointer;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--card);
+  list-style: none;                /* strip native triangle in Firefox */
+  user-select: none;
+  transition: border-color var(--dur-fast) var(--ease);
+}
+.filter-group__label--summary::-webkit-details-marker { display: none; }  /* Safari/Chrome */
+.filter-group__label--summary::after {
+  content: '▾';
+  color: var(--muted);
+  font-size: 11px;
+  transition: transform var(--dur-fast) var(--ease);
+}
+details[open] > .filter-group__label--summary::after { transform: rotate(180deg); }
+.filter-group__label--summary:hover { border-color: var(--line-strong); }
+
+.filter-group--collapsible .checklist {
+  margin-top: 6px;
+  border: 1px solid var(--line);
+}
+
+/* Selected-count bubble on the summary — populated by search.js */
+.filter-group__count:empty { display: none; }
+.filter-group__count {
+  min-width: 20px; height: 18px; padding: 0 6px;
+  margin-left: auto; margin-right: 10px;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: var(--gov-strong);
+  color: var(--card);
+  border-radius: 999px;
+  font-size: 11px; font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
 
 .checklist { max-height: 200px; overflow-y: auto; border: 1px solid var(--line);
              border-radius: var(--radius-sm); padding: 6px 8px; background: var(--card); }
@@ -485,26 +542,41 @@ table.tenders thead th.col-h {
   position: relative;
   white-space: nowrap;
 }
+/* Column-header buttons — sort AND filter — meet WCAG 2.5.5 (≥44px touch target).
+   Both are now larger, share a consistent min-height, and get an unmistakable
+   hover state so the affordance reads as "clickable" without hunting. */
 .col-sort {
   background: transparent; border: none; cursor: pointer;
   font-family: var(--f-head); font-weight: 600; font-size: 12px;
   text-transform: uppercase; letter-spacing: .04em; color: var(--gov);
-  padding: 10px 6px 10px 12px;
-  display: inline-flex; align-items: center; gap: 4px;
+  padding: 12px 8px 12px 14px;
+  min-height: 44px;
+  display: inline-flex; align-items: center; gap: 6px;
+  border-radius: 4px;
+  transition: background var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease);
 }
-.col-sort:hover { color: var(--bid); }
+.col-sort:hover { color: var(--bid); background: rgba(224,60,49,.06); }
+.col-sort:focus-visible { outline: 2px solid var(--bid); outline-offset: -2px; }
 .col-arrow {
-  display: inline-block; width: 10px; text-align: center;
-  color: var(--muted); font-size: 10px;
+  display: inline-block; width: 12px; text-align: center;
+  color: var(--muted); font-size: 12px; line-height: 1;
 }
 .col-sort.is-asc  .col-arrow::before { content: '▲'; color: var(--bid); }
 .col-sort.is-desc .col-arrow::before { content: '▼'; color: var(--bid); }
+
 .col-filter {
   background: transparent; border: none; cursor: pointer;
-  color: var(--muted); padding: 8px 10px 8px 2px; font-size: 13px;
-  border-radius: 4px;
+  color: var(--muted);
+  min-width: 32px; min-height: 44px;                /* was ~24×24, now WCAG-sized */
+  padding: 8px 10px;
+  font-size: 16px;                                   /* was 13px; icons read clearly now */
+  line-height: 1;
+  border-radius: 6px;
+  vertical-align: middle;
+  transition: background var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease);
 }
-.col-filter:hover { color: var(--bid); background: rgba(224,60,49,.06); }
+.col-filter:hover { color: var(--bid); background: rgba(224,60,49,.10); }
+.col-filter:focus-visible { outline: 2px solid var(--bid); outline-offset: -2px; }
 .col-filter.is-active { color: var(--bid); background: var(--bid-tint); }
 table.tenders thead th.num .col-sort { padding-left: 6px; }
 
@@ -914,6 +986,99 @@ body.app-shell {
   background: var(--gov-strong);
   border-color: var(--gov-strong);
   color: var(--card);
+}
+
+/* Airbnb-style contract-value range slider (Phase 5) */
+.val-slider {
+  padding: 6px 4px 0;
+  user-select: none;
+}
+.val-slider__hist {
+  display: flex; align-items: flex-end;
+  gap: 2px;
+  height: 44px;
+  padding: 0 8px;
+}
+.val-slider__bar {
+  flex: 1;
+  background: var(--line);
+  border-radius: 2px 2px 0 0;
+  transition: background var(--dur-fast) var(--ease);
+}
+.val-slider__bar.is-inside { background: var(--bid); }
+.val-slider__rail {
+  position: relative;
+  height: 4px;
+  margin: 0 8px;
+  background: var(--line);
+  border-radius: 2px;
+}
+.val-slider__range {
+  position: absolute; top: 0; bottom: 0;
+  background: var(--bid);
+  border-radius: 2px;
+}
+.val-slider__thumb {
+  position: absolute; top: 50%;
+  width: 22px; height: 22px;                     /* ≥ 22×22 for touch */
+  transform: translate(-50%, -50%);
+  background: var(--card);
+  border: 2px solid var(--bid);
+  border-radius: 50%;
+  cursor: grab;
+  padding: 0;
+  box-shadow: 0 1px 3px rgba(84,86,91,.2);
+  transition: box-shadow var(--dur-fast) var(--ease), transform var(--dur-fast) var(--ease);
+}
+.val-slider__thumb:hover  { transform: translate(-50%, -50%) scale(1.1); }
+.val-slider__thumb:active { cursor: grabbing; box-shadow: 0 2px 6px rgba(224,60,49,.35); }
+.val-slider__thumb:focus-visible { outline: 3px solid rgba(224,60,49,.35); outline-offset: 2px; }
+.val-slider__readouts {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 6px;
+  margin-top: 12px;
+  font-family: var(--f-body); font-size: 13px;
+  color: var(--gov);
+  font-variant-numeric: tabular-nums;
+}
+.val-slider__readout {
+  padding: 4px 8px;
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  min-width: 60px; text-align: center;
+  font-weight: 600;
+}
+.val-slider__sep { color: var(--muted); font-size: 11px; }
+
+/* Group-by tab (Phase 5 — replaces jQuery drag-drop pivot) */
+.groupby-controls {
+  display: flex; gap: var(--space-md); align-items: flex-end; flex-wrap: wrap;
+  padding: var(--space-md) 0;
+}
+.groupby-controls label { display: flex; flex-direction: column; gap: 4px; }
+.groupby-label {
+  font-size: 11px; font-weight: 600; color: var(--muted);
+  text-transform: uppercase; letter-spacing: .06em;
+}
+.groupby-controls .field { min-width: 200px; }
+.groupby-note { flex: 1; align-self: center; font-size: 12px; }
+.chart-wrap--md { min-height: 300px; margin-bottom: var(--space-md); }
+.groupby-tbl tr.groupby-row { cursor: pointer; transition: background var(--dur-fast) var(--ease); }
+.groupby-tbl tr.groupby-row:hover { background: var(--bg); }
+.groupby-tbl tr.groupby-row:focus-visible { outline: 2px solid var(--bid); outline-offset: -2px; }
+
+/* Live bids overview charts (Phase 5 addition) — 3-across on desktop, stack on mobile */
+.lb-charts { padding: var(--space-md); }
+.lb-charts__grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--space-md);
+}
+.lb-charts__grid .chart-wrap { min-height: 220px; }
+@media (max-width: 900px) {
+  .lb-charts__grid { grid-template-columns: 1fr; }
+  .lb-charts__grid .chart-wrap { min-height: 200px; }
 }
 
 

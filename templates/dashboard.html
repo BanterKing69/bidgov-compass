@@ -10,12 +10,9 @@
 {% block title %}Search · BidGov Compass{% endblock %}
 
 {% block page_head %}
-  {# jQuery + PivotTable.js — still needed for the Pivot tab.
-     Chart.js dropped: no charts on Search anymore. #}
-  <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/jquery-ui@1.13.2/dist/jquery-ui.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/pivottable@2.23.0/dist/pivot.min.js"></script>
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/pivottable@2.23.0/dist/pivot.min.css">
+  {# Chart.js — used by the Group-by tab (replaces jQuery PivotTable, which
+     was dropped along with jQuery + jquery-ui + pivottable CSS — Phase 5). #}
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
 {% endblock %}
 
 {% block content %}
@@ -46,19 +43,30 @@
       </select>
     </div>
 
+    {# ---- Contract value — Airbnb-style dual-thumb range slider ------
+       Replaces the min/max number inputs + "Quick" sweet-spot chips (Phase 5).
+       The histogram behind the slider redraws with the current filter state,
+       so users can see how narrowing (or widening) reshapes the distribution
+       before committing. Old #fltMin/#fltMax IDs are preserved as hidden
+       inputs so buildSearchQuery + loadFromUrl continue to work without
+       branching by widget. #}
     <div class="filter-group">
-      <label class="filter-group__label">Contract value (£)</label>
-      <div class="field--range">
-        <input id="fltMin" class="field" type="number" placeholder="min" min="0" step="1000" />
-        <span class="muted">—</span>
-        <input id="fltMax" class="field" type="number" placeholder="max" min="0" step="1000" />
+      <label class="filter-group__label" for="valSlider">Contract value</label>
+      <div class="val-slider" id="valSlider" role="group" aria-label="Contract value range">
+        <div class="val-slider__hist" id="valHist" aria-hidden="true"></div>
+        <div class="val-slider__rail">
+          <div class="val-slider__range" id="valRange"></div>
+          <button type="button" class="val-slider__thumb" id="valThumbMin" aria-label="Minimum value"></button>
+          <button type="button" class="val-slider__thumb" id="valThumbMax" aria-label="Maximum value"></button>
+        </div>
+        <div class="val-slider__readouts">
+          <output id="valReadoutMin" class="val-slider__readout">£–</output>
+          <span class="val-slider__sep">to</span>
+          <output id="valReadoutMax" class="val-slider__readout">£–</output>
+        </div>
       </div>
-      <div class="pivot-hint" style="margin-top:6px">
-        Quick:
-        <a href="#" data-band="sweet">£50k–£300k (sweet-spot)</a> ·
-        <a href="#" data-band="mid">£30k–£135k</a> ·
-        <a href="#" data-band="reset">clear</a>
-      </div>
+      <input id="fltMin" type="hidden" />
+      <input id="fltMax" type="hidden" />
     </div>
 
     <div class="filter-group">
@@ -70,15 +78,19 @@
       </div>
     </div>
 
-    <div class="filter-group">
-      <label class="filter-group__label">Category</label>
+    <details class="filter-group filter-group--collapsible">
+      <summary class="filter-group__label filter-group__label--summary">
+        Category <span class="filter-group__count" data-count-for="fltCategory"></span>
+      </summary>
       <div id="fltCategory" class="checklist"></div>
-    </div>
+    </details>
 
-    <div class="filter-group">
-      <label class="filter-group__label">Source portal</label>
+    <details class="filter-group filter-group--collapsible">
+      <summary class="filter-group__label filter-group__label--summary">
+        Source portal <span class="filter-group__count" data-count-for="fltSource"></span>
+      </summary>
       <div id="fltSource" class="checklist"></div>
-    </div>
+    </details>
 
     <div class="sidebar__foot">
       <button id="applyBtn" class="btn btn--primary">Apply</button>
@@ -154,17 +166,48 @@
       <div class="panel__meta" id="tblFoot" style="margin-top:10px;"></div>
     </section>
 
-    {# ---- Pivot tab ---- #}
+    {# ---- Group-by tab (replaces jQuery PivotTable drag-drop; Phase 5) ---- #}
     <section id="tab-pivot" class="tab-panel panel">
       <div class="panel__head">
-        <div class="panel__title">Pivot table</div>
-        <div class="panel__meta">Drag fields between rows / columns / values. Aggregation: pick from the dropdown.</div>
+        <div class="panel__title">Group by</div>
+        <div class="panel__meta">Aggregate the matching tenders on one dimension. Respects your sidebar filters.</div>
       </div>
-      <div class="pivot-hint">
-        Starter layout: <b>Category</b> in rows, <b>Source</b> in cols, count of value.
-        Try dragging <b>deadline_month</b> or <b>region</b> to explore.
+      <div class="groupby-controls">
+        <label>
+          <span class="groupby-label">Group by</span>
+          <select id="grpDim" class="field">
+            <option value="category">Category</option>
+            <option value="buyer">Buyer</option>
+            <option value="source">Source</option>
+            <option value="region">Region</option>
+            <option value="deadline_month">Deadline month</option>
+            <option value="value_band">Value band</option>
+          </select>
+        </label>
+        <label>
+          <span class="groupby-label">Metric</span>
+          <select id="grpMetric" class="field">
+            <option value="count">Number of notices</option>
+            <option value="sum_value">Total contract value (£)</option>
+            <option value="avg_value">Average value (£)</option>
+          </select>
+        </label>
+        <div class="groupby-note muted">
+          Click any bar or row → apply that value as a filter on Search.
+        </div>
       </div>
-      <div id="pivotOut"></div>
+      <div class="chart-wrap chart-wrap--md"><canvas id="grpChart"></canvas></div>
+      <div class="tbl-wrap groupby-tbl">
+        <table class="tenders">
+          <thead>
+            <tr>
+              <th scope="col" id="grpDimHead">Group</th>
+              <th scope="col" class="num" id="grpValHead">Value</th>
+            </tr>
+          </thead>
+          <tbody id="grpBody"><tr><td colspan="2" class="center muted">Loading…</td></tr></tbody>
+        </table>
+      </div>
     </section>
 
     {# ---- Chat tab ---- #}
