@@ -4,7 +4,7 @@
    locked to deadline >= now) and /api/live-stats for the KPI numbers.
    ----------------------------------------------------------------------- */
 
-import { $, C, fmtGBP, fmtInt } from './fmt.js';
+import { $, $$, C, fmtGBP, fmtInt } from './fmt.js';
 import { api } from './api.js';
 import { upsertChart } from './charts.js';
 import {
@@ -33,12 +33,74 @@ async function refreshKpis() {
   renderOverviewCharts(s);
 }
 
+/* ==========================================================================
+   Cross-filter helpers — chart click TOGGLES the matching sidebar filter,
+   which fires the existing refresh cycle (KPIs + all 3 charts + table).
+   Clicking the same element again clears that filter (toggle behaviour).
+   The visual highlight of "this filter is active" is already handled by the
+   existing chip/select CSS — no chart-level state needed.
+   ========================================================================== */
+
+/** Toggle a category on/off in the #lbCategory chip list. Fires 'change'
+ *  which wireLiveBidsFilters catches → refresh() runs. */
+function toggleCategoryFilter(category) {
+  if (category === 'Other') return;          // synthesised bucket, no matching chip
+  const cb = $$('#lbCategory input[type="checkbox"]')
+             .find(el => el.value === category);
+  if (!cb) return;                            // category not in facet list
+  cb.checked = !cb.checked;
+  cb.dispatchEvent(new Event('change', { bubbles: true }));
+}
+
+/** Deadline bucket → set the #lbDeadlineWindow select to the matching window.
+ *  Clicking the SAME bucket clears it (toggle). */
+const DEADLINE_BUCKET_TO_WINDOW = {
+  '≤7 days':   '7',
+  '8–14 days': '14',
+  '15–30 days': '30',
+  // 1–3 months and 3+ months have no matching window value; drop these clicks
+};
+function toggleDeadlineFilter(bucketLabel) {
+  const val = DEADLINE_BUCKET_TO_WINDOW[bucketLabel];
+  if (!val) return;
+  const sel = $('#lbDeadlineWindow');
+  sel.value = (sel.value === val) ? '' : val;
+  sel.dispatchEvent(new Event('change', { bubbles: true }));
+}
+
+/** Value band → set min/max range. Same band clicked twice = clear. */
+const VALUE_BAND_RANGES = {
+  '< £30k':        [0,      29999],
+  '£30k–£135k':    [30000,  135000],
+  '£135k–£300k':   [135000, 300000],
+  '£300k–£664k':   [300000, 664000],
+  '> £664k':       [664000, ''],       // no upper bound
+  // 'Unknown' — no numeric range to filter by; ignore
+};
+function toggleValueFilter(bandLabel) {
+  const range = VALUE_BAND_RANGES[bandLabel];
+  if (!range) return;
+  const [lo, hi] = range;
+  const min = $('#lbMin'), max = $('#lbMax');
+  const alreadySet = String(min.value) === String(lo) && String(max.value) === String(hi);
+  if (alreadySet) {
+    min.value = ''; max.value = '';
+  } else {
+    min.value = lo; max.value = hi;
+  }
+  min.dispatchEvent(new Event('input', { bubbles: true }));
+  max.dispatchEvent(new Event('input', { bubbles: true }));
+}
+
 /**
  * Three charts above the table (Phase 5 addition):
  *   1. Category doughnut — top-10 categories in the live-tender set
  *   2. Deadline bucket bar — how many bids close in ≤7d / 8–14d / 15–30d / 1–3mo / 3+mo
  *   3. Contract-value distribution bar — the same value bands used elsewhere
  * All three redraw on every filter change so they reflect the current slice.
+ * Every chart is CLICKABLE — clicking an element cross-filters the whole page
+ * (toggles the matching sidebar filter and lets the standard refresh cycle
+ * repaint everything). Same element clicked twice = filter cleared.
  */
 function renderOverviewCharts(s) {
   if (typeof window.Chart === 'undefined') return;   // defensive; script tag is in the template
@@ -61,17 +123,15 @@ function renderOverviewCharts(s) {
     options: {
       responsive: true, maintainAspectRatio: false, cutout: '55%',
       plugins: {
-        title: { display: true, text: 'By category · click a slice to drill',
+        title: { display: true, text: 'By category · click a slice to filter',
                  font: { family: 'Poppins', weight: '600', size: 13 } },
         legend: { position: 'right', labels: { boxWidth: 10, padding: 6, font: { size: 10 } } },
       },
-      // Drill-through: clicking a slice sends you to Search filtered by that category.
+      // Cross-filter: clicking a slice toggles that category chip and
+      // repaints all 3 charts + KPIs + table via the standard refresh cycle.
       onClick(_evt, elements, chart) {
         if (!elements.length) return;
-        const cat = chart.data.labels[elements[0].index];
-        if (cat === 'Other') return;   // "Other" is a bucket, not a real category
-        // Search route (/) accepts ?category=... — hydrated on load by loadSearchFromUrl.
-        window.location = '/?category=' + encodeURIComponent(cat);
+        toggleCategoryFilter(chart.data.labels[elements[0].index]);
       },
     },
   });
@@ -95,13 +155,20 @@ function renderOverviewCharts(s) {
     options: {
       responsive: true, maintainAspectRatio: false,
       plugins: {
-        title: { display: true, text: 'Deadline distribution',
+        title: { display: true, text: 'Deadline distribution · click a bar to filter',
                  font: { family: 'Poppins', weight: '600', size: 13 } },
         legend: { display: false },
       },
       scales: {
         x: { grid: { display: false }, ticks: { font: { size: 10 } } },
         y: { grid: { color: C.line }, ticks: { precision: 0 } },
+      },
+      // Cross-filter: sets #lbDeadlineWindow to 7/14/30 (or clears if same).
+      // The 1–3 mo / 3+ mo / no-deadline buckets don't map to a select option,
+      // so those clicks intentionally no-op (helper returns early).
+      onClick(_evt, elements, chart) {
+        if (!elements.length) return;
+        toggleDeadlineFilter(chart.data.labels[elements[0].index]);
       },
     },
   });
@@ -125,13 +192,19 @@ function renderOverviewCharts(s) {
     options: {
       responsive: true, maintainAspectRatio: false,
       plugins: {
-        title: { display: true, text: 'Contract value distribution',
+        title: { display: true, text: 'Contract value distribution · click a bar to filter',
                  font: { family: 'Poppins', weight: '600', size: 13 } },
         legend: { display: false },
       },
       scales: {
         x: { grid: { display: false }, ticks: { font: { size: 10 } } },
         y: { grid: { color: C.line }, ticks: { precision: 0 } },
+      },
+      // Cross-filter: sets #lbMin / #lbMax to the band's endpoints (or clears).
+      // 'Unknown' has no numeric range → no-op.
+      onClick(_evt, elements, chart) {
+        if (!elements.length) return;
+        toggleValueFilter(chart.data.labels[elements[0].index]);
       },
     },
   });
