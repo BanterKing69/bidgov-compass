@@ -41,6 +41,19 @@
     </div>
   </div>
 
+  {# ============================== Category carousel (Airbnb-style) =======
+     Horizontal scrollable pill row of the top N sweet-spot categories with
+     live counts. Clicking a pill toggles the matching #lbCategory chip
+     (same helper as the chart click), so it cross-filters the entire page.
+     Populated by live-bids.js from /api/live-stats.by_category. #}
+  <nav class="lb-catnav" aria-label="Browse by category">
+    <button class="lb-catnav__scroll lb-catnav__scroll--left" type="button" aria-label="Scroll categories left" hidden>‹</button>
+    <div class="lb-catnav__track" id="lbCatnavTrack" role="tablist">
+      <!-- pills injected here by JS -->
+    </div>
+    <button class="lb-catnav__scroll lb-catnav__scroll--right" type="button" aria-label="Scroll categories right" hidden>›</button>
+  </nav>
+
   {# ============================== Overview charts (Phase 5 addition) ===== #}
   <section class="panel lb-charts">
     <div class="panel__head">

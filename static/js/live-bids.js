@@ -4,7 +4,7 @@
    locked to deadline >= now) and /api/live-stats for the KPI numbers.
    ----------------------------------------------------------------------- */
 
-import { $, $$, C, fmtGBP, fmtInt } from './fmt.js';
+import { $, $$, C, escapeHtml, fmtGBP, fmtInt } from './fmt.js';
 import { api } from './api.js';
 import { upsertChart } from './charts.js';
 import {
@@ -30,6 +30,7 @@ async function refreshKpis() {
   $('#lbKpiValue').textContent   = fmtGBP(s.total_open_value);
   $('#lbKpiValue').title         = s.total_open_value.toLocaleString('en-GB', { style: 'currency', currency: 'GBP' });
   $('#lbKpiClosing').textContent = fmtInt(s.closing_7d);
+  renderCategoryCarousel(s);   // Airbnb-style pill row above the charts
   renderOverviewCharts(s);
 }
 
@@ -90,6 +91,76 @@ function toggleValueFilter(bandLabel) {
   }
   min.dispatchEvent(new Event('input', { bubbles: true }));
   max.dispatchEvent(new Event('input', { bubbles: true }));
+}
+
+/* ==========================================================================
+   Airbnb-style category carousel — top N sweet-spot categories with live
+   counts, horizontally scrollable. Clicking a pill reuses toggleCategoryFilter
+   (same helper as the pie-slice click) so state and behaviour stay unified.
+   Repaints on every `by_category` update so counts + active state stay live.
+   ========================================================================== */
+
+const CATNAV_TOP_N = 15;   // top 15 categories by open count on the CURRENT filter scope
+
+/** Read the currently-checked chips so pills can show the active state. */
+function getCheckedCategories() {
+  return new Set(
+    $$('#lbCategory input[type="checkbox"]:checked').map(el => el.value)
+  );
+}
+
+function renderCategoryCarousel(s) {
+  const track = $('#lbCatnavTrack');
+  if (!track) return;
+  const rows = (s.by_category || []).slice(0, CATNAV_TOP_N);
+  const checked = getCheckedCategories();
+  track.innerHTML = rows.map(r => {
+    const isActive = checked.has(r.k);
+    return `<button type="button" role="tab"
+                    class="lb-catpill${isActive ? ' is-active' : ''}"
+                    data-cat="${escapeHtml(r.k)}"
+                    aria-pressed="${isActive}">
+      <span class="lb-catpill__name">${escapeHtml(r.k)}</span>
+      <span class="lb-catpill__count">${r.n}</span>
+    </button>`;
+  }).join('');
+  syncCarouselScrollButtons();
+}
+
+/** Show/hide the ‹ › scroll buttons based on scroll position. */
+function syncCarouselScrollButtons() {
+  const track = $('#lbCatnavTrack');
+  if (!track) return;
+  const left = track.parentElement.querySelector('.lb-catnav__scroll--left');
+  const right = track.parentElement.querySelector('.lb-catnav__scroll--right');
+  const canScroll = track.scrollWidth > track.clientWidth;
+  const atStart = track.scrollLeft <= 4;
+  const atEnd = track.scrollLeft + track.clientWidth >= track.scrollWidth - 4;
+  if (left)  left.hidden  = !canScroll || atStart;
+  if (right) right.hidden = !canScroll || atEnd;
+}
+
+/** Wire click → toggleCategoryFilter, scroll button clicks, and scroll-state
+ *  updates for the ‹ › affordance. Idempotent — safe to call once at boot. */
+function wireCategoryCarousel() {
+  const track = $('#lbCatnavTrack');
+  if (!track) return;
+  // Delegated pill click
+  track.addEventListener('click', (e) => {
+    const pill = e.target.closest('.lb-catpill');
+    if (!pill) return;
+    toggleCategoryFilter(pill.dataset.cat);
+  });
+  // Scroll buttons
+  const nav = track.parentElement;
+  nav.querySelector('.lb-catnav__scroll--left')?.addEventListener('click', () => {
+    track.scrollBy({ left: -track.clientWidth * 0.8, behavior: 'smooth' });
+  });
+  nav.querySelector('.lb-catnav__scroll--right')?.addEventListener('click', () => {
+    track.scrollBy({ left:  track.clientWidth * 0.8, behavior: 'smooth' });
+  });
+  track.addEventListener('scroll', syncCarouselScrollButtons, { passive: true });
+  window.addEventListener('resize', syncCarouselScrollButtons);
 }
 
 /**
@@ -240,6 +311,7 @@ async function boot() {
   wireLiveBidsFilters(refresh);
   wireEmptyStateClear();
   wireTrackButtons('#lbBody');           // admin-only Track button on rows (Phase 4)
+  wireCategoryCarousel();                 // Airbnb-style pill row (Phase 6)
   refresh();                              // debounced internally; no promise to await
   window.addEventListener('popstate', () => { loadLiveBidsFromUrl(); refresh(); });
 }

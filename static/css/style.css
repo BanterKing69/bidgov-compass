@@ -1068,6 +1068,88 @@ body.app-shell {
 .groupby-tbl tr.groupby-row:hover { background: var(--bg); }
 .groupby-tbl tr.groupby-row:focus-visible { outline: 2px solid var(--bid); outline-offset: -2px; }
 
+/* Airbnb-style category carousel (Phase 6) — horizontal scrollable pill row
+   above the Live bids overview charts. Pills reuse the same cross-filter
+   helper as the pie-slice click, so state stays unified. */
+.lb-catnav {
+  position: relative;
+  display: flex; align-items: center;
+  margin-bottom: var(--space-md);
+}
+.lb-catnav__track {
+  flex: 1;
+  display: flex; gap: var(--space-sm);
+  overflow-x: auto;
+  scroll-behavior: smooth;
+  scrollbar-width: none;                            /* Firefox */
+  -ms-overflow-style: none;                          /* IE / old Edge */
+  padding: 4px 0;                                    /* room for focus outlines */
+  scroll-snap-type: x proximity;
+}
+.lb-catnav__track::-webkit-scrollbar { display: none; }  /* WebKit */
+.lb-catpill {
+  flex: 0 0 auto;
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 8px 14px;
+  min-height: 40px;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-pill);
+  font-family: var(--f-body); font-size: 13px; font-weight: 500;
+  color: var(--gov);
+  cursor: pointer;
+  white-space: nowrap;
+  scroll-snap-align: start;
+  transition: background var(--dur-fast) var(--ease),
+              border-color var(--dur-fast) var(--ease),
+              color var(--dur-fast) var(--ease),
+              transform var(--dur-fast) var(--ease);
+}
+.lb-catpill:hover        { border-color: var(--line-strong); transform: translateY(-1px); }
+.lb-catpill:focus-visible{ outline: 2px solid var(--bid); outline-offset: 2px; }
+.lb-catpill.is-active {
+  background: var(--gov-strong);
+  border-color: var(--gov-strong);
+  color: var(--card);
+}
+.lb-catpill__count {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: 22px; height: 20px; padding: 0 6px;
+  background: var(--bg);
+  border-radius: var(--radius-pill);
+  font-size: 11px; font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--gov-strong);
+}
+.lb-catpill.is-active .lb-catpill__count {
+  background: rgba(255,255,255,.15);
+  color: var(--card);
+}
+
+.lb-catnav__scroll {
+  flex: 0 0 auto;
+  width: 32px; height: 32px;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  font-size: 18px; line-height: 1;
+  color: var(--gov);
+  cursor: pointer;
+  box-shadow: var(--shadow-1);
+  transition: background var(--dur-fast) var(--ease), transform var(--dur-fast) var(--ease);
+}
+.lb-catnav__scroll:hover { background: var(--bg); transform: scale(1.05); }
+.lb-catnav__scroll[hidden] { display: none; }
+.lb-catnav__scroll--left  { margin-right: 8px; }
+.lb-catnav__scroll--right { margin-left: 8px; }
+
+/* On mobile: hide the ‹ › buttons entirely and rely on native touch scroll */
+@media (max-width: 767px) {
+  .lb-catnav__scroll { display: none !important; }
+  .lb-catnav__track  { padding: 4px var(--space-md); margin: 0 calc(-1 * var(--space-md)); }
+}
+
 /* Live bids overview charts (Phase 5 addition) — 3-across on desktop, stack on mobile */
 .lb-charts { padding: var(--space-md); }
 .lb-charts__grid {
