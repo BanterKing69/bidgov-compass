@@ -5,6 +5,7 @@
   <p class="auth-lede">Access your tender intelligence dashboard.</p>
 
   <form method="POST" class="auth-form" autocomplete="on">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
     <label for="email">Email</label>
     <input id="email" name="email" type="email" required autofocus
            value="{{ email or '' }}" autocomplete="email" />

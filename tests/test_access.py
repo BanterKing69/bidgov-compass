@@ -13,6 +13,8 @@ Enforces the spec §10.2/§10.3 authorisation rules:
 
 from __future__ import annotations
 
+from tests.conftest import csrf_headers
+
 
 # --------------------------------------------------------------------------- #
 # Anonymous access — client pages redirect to /auth/login; APIs return 401 JSON.
@@ -78,7 +80,9 @@ def test_nonadmin_forbidden_on_admin_apis(user):
 
 
 def test_nonadmin_forbidden_on_scrape_post(user):
-    r = user.post("/api/scrape", json={"days_back": 1, "max_pages": 1})
+    r = user.post("/api/scrape",
+                  headers=csrf_headers(user),
+                  json={"days_back": 1, "max_pages": 1})
     assert r.status_code == 403
     assert r.get_json().get("error") == "admin_required"
 
@@ -115,21 +119,24 @@ def test_admin_client_pages_still_work(admin):
 # --------------------------------------------------------------------------- #
 def test_cannot_deactivate_self(admin, user_ids):
     admin_id = user_ids["admin_pytest@test.local"]
-    r = admin.post(f"/api/admin/users/{admin_id}/deactivate")
+    r = admin.post(f"/api/admin/users/{admin_id}/deactivate",
+                   headers=csrf_headers(admin))
     assert r.status_code == 400
     assert r.get_json().get("error") == "cannot_act_on_self"
 
 
 def test_cannot_demote_self(admin, user_ids):
     admin_id = user_ids["admin_pytest@test.local"]
-    r = admin.post(f"/api/admin/users/{admin_id}/demote")
+    r = admin.post(f"/api/admin/users/{admin_id}/demote",
+                   headers=csrf_headers(admin))
     assert r.status_code == 400
     assert r.get_json().get("error") == "cannot_act_on_self"
 
 
 def test_cannot_delete_self(admin, user_ids):
     admin_id = user_ids["admin_pytest@test.local"]
-    r = admin.post(f"/api/admin/users/{admin_id}/delete")
+    r = admin.post(f"/api/admin/users/{admin_id}/delete",
+                   headers=csrf_headers(admin))
     assert r.status_code == 400
     assert r.get_json().get("error") == "cannot_act_on_self"
 
@@ -205,24 +212,21 @@ def test_last_admin_guard_via_http(admin, user_ids):
     guard through HTTP we'd need a distinct actor, which the test seed doesn't
     provide without also creating race conditions. Coverage of the helper
     (previous test) + self-guard (below) collectively verify the spec."""
+    hdr = csrf_headers(admin)
     admin2_id = user_ids["admin2_pytest@test.local"]
-    # Demote admin2 — succeeds because admin1 (actor) is still admin
-    r = admin.post(f"/api/admin/users/{admin2_id}/demote")
+    r = admin.post(f"/api/admin/users/{admin2_id}/demote", headers=hdr)
     assert r.status_code == 200, f"demoting non-last admin failed: {r.status_code} {r.data}"
-    # Now admin1 is the sole active admin. Trying to deactivate admin2 (who is
-    # now non-admin): allowed — non-admin target, guard doesn't fire.
-    r = admin.post(f"/api/admin/users/{admin2_id}/deactivate")
+    r = admin.post(f"/api/admin/users/{admin2_id}/deactivate", headers=hdr)
     assert r.status_code == 200
-    # But trying to demote/deactivate/delete admin1 himself → self-guard.
     admin1_id = user_ids["admin_pytest@test.local"]
     for action in ("deactivate", "demote", "delete"):
-        r = admin.post(f"/api/admin/users/{admin1_id}/{action}")
+        r = admin.post(f"/api/admin/users/{admin1_id}/{action}", headers=hdr)
         assert r.status_code == 400
         assert r.get_json().get("error") == "cannot_act_on_self"
     # Re-promote admin2 to restore a two-admin state for downstream tests
     # (fixture is session-scoped, so ordering matters — cleanup keeps the
     # state healthy).
-    r = admin.post(f"/api/admin/users/{admin2_id}/promote")
+    r = admin.post(f"/api/admin/users/{admin2_id}/promote", headers=hdr)
     assert r.status_code == 200
-    r = admin.post(f"/api/admin/users/{admin2_id}/activate")
+    r = admin.post(f"/api/admin/users/{admin2_id}/activate", headers=hdr)
     assert r.status_code == 200

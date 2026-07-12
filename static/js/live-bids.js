@@ -10,7 +10,7 @@ import {
   loadLiveBidsFacets, loadLiveBidsFromUrl, pushLiveBidsUrlState,
   buildLiveBidsQuery, wireLiveBidsFilters,
 } from './filters.js';
-import { renderTenderTable, renderTableFoot } from './table.js';
+import { renderTenderTable, renderTableFoot, wireTrackButtons } from './table.js';
 
 let refreshTimer = null;
 function refresh(delay = 0) {
@@ -60,6 +60,7 @@ async function boot() {
   loadLiveBidsFromUrl();
   wireLiveBidsFilters(refresh);
   wireEmptyStateClear();
+  wireTrackButtons('#lbBody');           // admin-only Track button on rows (Phase 4)
   await refresh();
   window.addEventListener('popstate', () => { loadLiveBidsFromUrl(); refresh(); });
 }

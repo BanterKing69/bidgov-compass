@@ -13,7 +13,7 @@ import {
   loadSearchFromUrl, pushSearchUrlState, buildSearchQuery, paintFilterActive,
 } from './filters.js';
 import {
-  renderTenderTable, renderTableFoot, wireHeaderSort,
+  renderTenderTable, renderTableFoot, wireHeaderSort, wireTrackButtons,
 } from './table.js';
 
 /* ---- Refresh cycle: sync URL, refetch table (+ pivot if visible) --------- */
@@ -225,6 +225,7 @@ async function boot() {
   wireHeaderSort(refresh);
   wireColumnPopovers(refresh);
   wireEmptyStateClear();
+  wireTrackButtons('#tblBody');           // admin-only Track button on rows (Phase 4)
   await refresh();
   paintFilterActive();
   // Back/forward-button aware

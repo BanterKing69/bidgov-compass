@@ -15,6 +15,7 @@ from flask import (
     Flask, Response, jsonify, render_template, request, send_file, abort
 )
 from flask_login import login_required, current_user
+from flask_wtf.csrf import CSRFProtect, generate_csrf
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.path.insert(0, str(Path(__file__).resolve().parent / "collectors"))
@@ -28,6 +29,27 @@ APP_ROOT = Path(__file__).resolve().parent
 app = Flask(__name__, template_folder="templates", static_folder="static")
 auth.init_app(app)
 admin.init_app(app)
+
+# --------------------------------------------------------------------------- #
+# CSRF (Phase 4) — required on every state-changing method (POST/PATCH/DELETE/PUT).
+# The frontend api.js helper reads <meta name="csrf-token"> and attaches
+# X-CSRFToken automatically on non-GET requests. Only /health is exempt so
+# platform health checks (Render, load balancers) can hit it without a token.
+# --------------------------------------------------------------------------- #
+csrf = CSRFProtect(app)
+
+
+@app.context_processor
+def _inject_csrf_token():
+    """Populate the empty `<meta name="csrf-token" content="">` placeholder
+    in _app_base.html so the frontend can attach X-CSRFToken to every non-GET
+    fetch."""
+    return {"csrf_token": generate_csrf}
+
+
+# The health check is called by Render / uptime monitors without a session;
+# it's a read-only GET but CSRFProtect only guards state-changers anyway, so
+# no exemption needed. Left as-is.
 
 # --------------------------------------------------------------------------- #
 # Scrape job state (in-memory; one job at a time)

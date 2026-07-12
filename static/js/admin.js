@@ -8,8 +8,9 @@
    this JS never has to worry about non-admin execution.
    ----------------------------------------------------------------------- */
 
-import { $, $$, escapeHtml, fmtDate, fmtDateTime, fmtInt } from './fmt.js';
+import { $, $$, C, escapeHtml, fmtDate, fmtDateTime, fmtGBP, fmtGBPFull, fmtInt } from './fmt.js';
 import { api } from './api.js';
+import { upsertChart } from './charts.js';
 
 /* ==========================================================================
    Tabs (client-side switch — single URL)
@@ -23,10 +24,10 @@ function activateTab(name) {
   $('#tab-' + name).classList.add('is-active');
   if (history.replaceState) history.replaceState(null, '', '#' + name);
   // Kick data-fetches for tabs that lazy-load
-  if (name === 'users')   refreshUsers();
-  if (name === 'dataops') refreshScrapeStatus();
-  if (name === 'overview' && typeof refreshOverview === 'function') refreshOverview();
-  if (name === 'pipeline' && typeof refreshPipeline === 'function') refreshPipeline();
+  if (name === 'users')    refreshUsers();
+  if (name === 'dataops')  refreshScrapeStatus();
+  if (name === 'overview') refreshOverview();
+  if (name === 'pipeline') refreshPipeline();
 }
 function wireTabs() {
   $$('.tab').forEach(t => t.addEventListener('click', () => activateTab(t.dataset.tab)));
@@ -190,18 +191,211 @@ function wireDataOps() {
 }
 
 /* ==========================================================================
+   Overview tab — fee economics (Phase 4)
+   Reads /api/admin/overview (pipeline table + tender join + derived numbers).
+   ========================================================================== */
+async function refreshOverview() {
+  const s = await api('/api/admin/overview');
+  if (!s) return;
+  // KPIs
+  $('#admKpiRevenue').textContent  = fmtGBP(s.revenue_booked);
+  $('#admKpiRevenue').title        = fmtGBPFull(s.revenue_booked);
+  $('#admKpiPipeline').textContent = fmtGBP(s.pipeline_unweighted);
+  $('#admKpiPipeline').title       = fmtGBPFull(s.pipeline_unweighted);
+  $('#admKpiExpected').textContent = fmtGBP(s.expected_per_deal);
+  $('#admKpiExpected').title       = fmtGBPFull(s.expected_per_deal);
+  $('#admKpiCount').textContent    = fmtInt(s.deal_count);
+  // Funnel — horizontal bars per stage, widths proportional to max count
+  const max = Math.max(1, ...s.funnel.map(r => r.count));
+  $('#admFunnel').innerHTML = s.funnel.map(r => {
+    const w = Math.round((r.count / max) * 100);
+    return `<div class="funnel__row">
+      <div class="funnel__label">${escapeHtml(r.stage)}</div>
+      <div class="funnel__bar"><div class="funnel__fill" style="width:${w}%"></div></div>
+      <div class="funnel__count">${fmtInt(r.count)}</div>
+    </div>`;
+  }).join('');
+  // Fees-by-category bar chart (Chart.js, charcoal — the single most important
+  // number is the KPI; the chart is a supporting distribution, kept plain).
+  const top = s.fees_by_category.slice(0, 15);
+  upsertChart('admChartFees', {
+    type: 'bar',
+    data: {
+      labels: top.map(r => r.category),
+      datasets: [{ label: 'Expected £', data: top.map(r => r.expected),
+                   backgroundColor: C.gov, borderRadius: 4 }],
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: { callbacks: { label: ctx => fmtGBPFull(ctx.raw) } },
+      },
+      scales: {
+        x: { grid: { display: false }, ticks: { autoSkip: false, maxRotation: 45, minRotation: 30, font: { size: 10 } } },
+        y: { grid: { color: C.line }, ticks: { callback: v => fmtGBP(v) } },
+      }
+    }
+  });
+}
+
+/* ==========================================================================
+   Pipeline tab — deal-tracking CRUD (Phase 4)
+   Table with inline edit for stage/client/notes; add-by-search below the header.
+   ========================================================================== */
+const STAGES = ['qualified', 'quoted', 'writing', 'submitted', 'won', 'lost'];
+
+async function refreshPipeline() {
+  const r = await api('/api/admin/pipeline');
+  if (!r) return;
+  const tbody = $('#pipeBody');
+  const rows = r.rows;
+  if (!rows.length) {
+    tbody.innerHTML = `<tr><td colspan="8">
+      <div class="empty">
+        <div class="empty__title">No tracked deals yet</div>
+        <div class="empty__body">Use the search box above or the <strong>Track</strong> action on any tender row (Search / Live bids) to add one.</div>
+      </div>
+    </td></tr>`;
+  } else {
+    tbody.innerHTML = rows.map(rowHtmlPipeline).join('');
+  }
+  $('#pipeFoot').textContent = rows.length
+    ? `${fmtInt(rows.length)} tracked deal${rows.length === 1 ? '' : 's'}`
+    : '';
+}
+
+function rowHtmlPipeline(p) {
+  const t = p.tender || {};
+  const title = t.notice_url
+    ? `<a href="${escapeHtml(t.notice_url)}" target="_blank" rel="noopener">${escapeHtml(t.title || p.tender_uid)}</a>`
+    : escapeHtml(t.title || p.tender_uid);
+  const value = t.value_amount != null ? fmtGBP(t.value_amount) : '<span class="muted">–</span>';
+  const feesTip = `Success fee (5%): ${fmtGBPFull(p.success_fee || 0)} · Expected £: ${fmtGBPFull(p.expected_value || 0)}`;
+  const fees = `<span title="${escapeHtml(feesTip)}">${fmtGBP(p.expected_value || 0)}</span>`;
+  const stageSel = `<select class="field field--sm" data-pipe-field="stage">
+    ${STAGES.map(s => `<option value="${s}"${s === p.stage ? ' selected' : ''}>${s}</option>`).join('')}
+  </select>`;
+  const clientInput = `<input class="field field--sm" type="text" data-pipe-field="client_name" value="${escapeHtml(p.client_name)}" />`;
+  return `<tr data-pipe-id="${p.id}">
+    <td class="title">${title}${p.notes ? `<div class="muted" style="font-size:11px">${escapeHtml(p.notes)}</div>` : ''}</td>
+    <td>${escapeHtml(t.buyer_name || '')}</td>
+    <td>${clientInput}</td>
+    <td>${stageSel}</td>
+    <td class="num">${value}</td>
+    <td class="num">${fees}</td>
+    <td>${p.updated_at ? fmtDate(p.updated_at) : ''}</td>
+    <td class="users-actions">
+      <button class="btn btn--secondary btn--sm" data-pipe-action="delete" data-danger="1">Delete</button>
+    </td>
+  </tr>`;
+}
+
+// Pipeline add — search /api/tenders?q= and offer to track any result.
+let _addAbort = null;
+async function pipeSearch(q) {
+  if (_addAbort) _addAbort.abort();
+  _addAbort = new AbortController();
+  const list = $('#pipeAddResults');
+  if (!q || q.length < 2) { list.hidden = true; list.innerHTML = ''; return; }
+  let r;
+  try {
+    r = await api('/api/tenders?q=' + encodeURIComponent(q) + '&limit=20&open_only=1',
+                  { signal: _addAbort.signal });
+  } catch (_) { return; }
+  if (!r) return;
+  if (!r.rows.length) {
+    list.hidden = false;
+    list.innerHTML = '<div class="muted" style="padding:6px 4px">No matches.</div>';
+    return;
+  }
+  list.hidden = false;
+  list.innerHTML = r.rows.map(t => `
+    <div class="pipe-add__row" data-tender-uid="${escapeHtml(t.uid)}">
+      <div>
+        <div><strong>${escapeHtml(t.title || '')}</strong></div>
+        <div class="muted" style="font-size:11px">
+          ${escapeHtml(t.buyer_name || '')} · ${escapeHtml(t.category || '(unmapped)')}
+          · ${t.value_amount != null ? fmtGBP(t.value_amount) : 'value –'}
+        </div>
+      </div>
+      <button class="btn btn--primary btn--sm" data-pipe-add="1">+ Track</button>
+    </div>`).join('');
+}
+
+function wirePipeline() {
+  // Add-by-search
+  const q = $('#pipeAddQ');
+  let t = null;
+  q.addEventListener('input', () => {
+    clearTimeout(t);
+    t = setTimeout(() => pipeSearch(q.value.trim()), 250);
+  });
+  $('#pipeAddResults').addEventListener('click', async (e) => {
+    const btn = e.target.closest('[data-pipe-add]');
+    if (!btn) return;
+    const row = btn.closest('[data-tender-uid]');
+    const uid = row.dataset.tenderUid;
+    const clientName = prompt('Client name for this deal?');
+    if (!clientName) return;
+    btn.disabled = true;
+    try {
+      const r = await api('/api/admin/pipeline', {
+        json: { tender_uid: uid, client_name: clientName },
+      });
+      if (r && r.ok) {
+        $('#pipeAddResults').hidden = true;
+        $('#pipeAddResults').innerHTML = '';
+        $('#pipeAddQ').value = '';
+        await refreshPipeline();
+        await refreshOverview();
+      }
+    } catch (_) { /* toast already surfaced */ }
+    finally { btn.disabled = false; }
+  });
+
+  // Inline edits + delete (delegated on tbody)
+  $('#pipeBody').addEventListener('change', async (e) => {
+    const field = e.target.dataset.pipeField;
+    if (!field) return;
+    const tr = e.target.closest('tr[data-pipe-id]');
+    const id = tr.dataset.pipeId;
+    const patch = { [field]: e.target.value };
+    await api(`/api/admin/pipeline/${id}`, { method: 'PATCH', json: patch });
+    // Re-render to pick up recomputed fees, updated_at, etc.
+    await refreshPipeline();
+    await refreshOverview();
+  });
+  $('#pipeBody').addEventListener('click', async (e) => {
+    const btn = e.target.closest('[data-pipe-action="delete"]');
+    if (!btn) return;
+    const tr = btn.closest('tr[data-pipe-id]');
+    if (!confirm('Delete this pipeline entry?')) return;
+    btn.disabled = true;
+    try {
+      await api(`/api/admin/pipeline/${tr.dataset.pipeId}`, { method: 'DELETE' });
+      await refreshPipeline();
+      await refreshOverview();
+    } finally { btn.disabled = false; }
+  });
+
+  // Export CSV
+  $('#pipeExport').addEventListener('click', () => {
+    window.location = '/api/admin/pipeline/export';
+  });
+}
+
+
+/* ==========================================================================
    Boot
    ========================================================================== */
 function boot() {
   wireTabs();
   wireUserActions();
   wireDataOps();
-  // Default landing on Overview; if hash was set, wireTabs already switched
-  const activeHash = (location.hash || '').replace('#', '');
-  if (!['overview', 'pipeline', 'users', 'dataops'].includes(activeHash)) {
-    // Overview needs Phase 4 wiring; for Phase 3 the tab is visible-but-empty
-    // beyond the placeholder KPIs — that's fine, Users + Data ops are usable.
-  }
+  wirePipeline();
+  // Load Overview data by default (initial tab).
+  refreshOverview();
 }
 
 boot();

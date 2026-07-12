@@ -21,9 +21,14 @@ This keeps it out of the chat-queryable connection by construction.
 
 from __future__ import annotations
 
-from flask import Blueprint, current_app, jsonify, render_template, request
+import csv
+import io
+from datetime import datetime, timezone
+
+from flask import Blueprint, Response, jsonify, render_template, request
 from flask_login import current_user
 
+import pipeline as pipeline_mod
 from auth import (
     admin_required,
     count_active_admins,
@@ -143,11 +148,101 @@ def api_users_delete(user_id: int):
 
 
 # --------------------------------------------------------------------------- #
-# Pipeline + fees APIs land here in Phase 4:
-#   GET/POST /api/admin/pipeline
-#   PATCH/DELETE /api/admin/pipeline/<id>
-#   GET /api/admin/pipeline/export
+# Overview economics — Phase 4. Read-only aggregation over the pipeline table
+# joined against tenders.db at query time (see pipeline.py). Fee data NEVER
+# lives in tenders.db, so this endpoint is the only surface where derived
+# economics reach the client — behind admin_required.
 # --------------------------------------------------------------------------- #
+@admin_bp.route("/api/admin/overview", methods=["GET"])
+@admin_required
+def api_admin_overview():
+    return jsonify(pipeline_mod.compute_overview())
+
+
+# --------------------------------------------------------------------------- #
+# Pipeline CRUD — spec §5.
+# --------------------------------------------------------------------------- #
+@admin_bp.route("/api/admin/pipeline", methods=["GET"])
+@admin_required
+def api_pipeline_list():
+    return jsonify({"rows": pipeline_mod.list_pipeline()})
+
+
+@admin_bp.route("/api/admin/pipeline", methods=["POST"])
+@admin_required
+def api_pipeline_create():
+    payload = request.get_json(silent=True) or {}
+    outcome_value = payload.get("outcome_value")
+    new_id, err = pipeline_mod.create_pipeline_row(
+        tender_uid=str(payload.get("tender_uid", "")),
+        client_name=str(payload.get("client_name", "")),
+        stage=str(payload.get("stage", "qualified")),
+        fee_upfront=float(payload.get("fee_upfront", 1500)),
+        fee_success_pct=float(payload.get("fee_success_pct", 5.0)),
+        outcome_value=(float(outcome_value) if outcome_value is not None else None),
+        notes=str(payload.get("notes", "")),
+    )
+    if err:
+        return jsonify({"error": err}), 400
+    return jsonify({"ok": True, "id": new_id}), 201
+
+
+@admin_bp.route("/api/admin/pipeline/<int:row_id>", methods=["PATCH"])
+@admin_required
+def api_pipeline_update(row_id: int):
+    payload = request.get_json(silent=True) or {}
+    ok, err = pipeline_mod.update_pipeline_row(row_id, payload)
+    if err:
+        return jsonify({"error": err}), 400
+    if not ok:
+        return jsonify({"error": "not_found"}), 404
+    return jsonify({"ok": True})
+
+
+@admin_bp.route("/api/admin/pipeline/<int:row_id>", methods=["DELETE"])
+@admin_required
+def api_pipeline_delete(row_id: int):
+    ok = pipeline_mod.delete_pipeline_row(row_id)
+    if not ok:
+        return jsonify({"error": "not_found"}), 404
+    return jsonify({"ok": True})
+
+
+# --------------------------------------------------------------------------- #
+# Pipeline CSV export — WITH fee columns. Admin-only. Never merged into
+# the client-facing /api/export flow; that endpoint only ever sees tender
+# rows, never a fee.
+# --------------------------------------------------------------------------- #
+@admin_bp.route("/api/admin/pipeline/export", methods=["GET"])
+@admin_required
+def api_pipeline_export():
+    rows = pipeline_mod.list_pipeline()
+    buf = io.StringIO()
+    w = csv.writer(buf)
+    w.writerow([
+        "id", "tender_uid", "client_name", "stage",
+        "fee_upfront", "fee_success_pct", "success_fee",
+        "expected_value", "outcome_value",
+        "tender_title", "tender_buyer", "tender_category",
+        "tender_value_amount", "tender_deadline", "tender_notice_url",
+        "notes", "created_at", "updated_at",
+    ])
+    for r in rows:
+        t = r.get("tender") or {}
+        w.writerow([
+            r["id"], r["tender_uid"], r["client_name"], r["stage"],
+            r["fee_upfront"], r["fee_success_pct"], r.get("success_fee"),
+            r.get("expected_value"), r.get("outcome_value"),
+            t.get("title"), t.get("buyer_name"), t.get("category"),
+            t.get("value_amount"), t.get("deadline"), t.get("notice_url"),
+            r.get("notes"), r["created_at"], r["updated_at"],
+        ])
+    stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    return Response(
+        buf.getvalue(),
+        mimetype="text/csv",
+        headers={"Content-Disposition": f'attachment; filename="bidgov-pipeline-{stamp}.csv"'},
+    )
 
 
 def init_app(app):

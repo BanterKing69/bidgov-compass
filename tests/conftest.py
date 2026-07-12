@@ -62,15 +62,33 @@ def client(flask_app):
     return flask_app.test_client()
 
 
+import re
+_CSRF_META = re.compile(rb'<meta name="csrf-token" content="([^"]+)"')
+_CSRF_FORM = re.compile(rb'name="csrf_token" value="([^"]+)"')
+
+
+def _grab_csrf(client, form_path):
+    """GET the form page and extract the CSRF token so the POST that follows
+    isn't blocked by CSRFProtect. Real integration path — not disabled."""
+    r = client.get(form_path)
+    m = _CSRF_FORM.search(r.data) or _CSRF_META.search(r.data)
+    assert m, f"no CSRF token in {form_path} response"
+    return m.group(1).decode()
+
+
 def _signup(client, email, name, password="testpass1234"):
+    token = _grab_csrf(client, "/auth/signup")
     return client.post("/auth/signup", data={
+        "csrf_token": token,
         "email": email, "name": name,
         "password": password, "confirm": password,
     }, follow_redirects=False)
 
 
 def _login(client, email, password="testpass1234"):
+    token = _grab_csrf(client, "/auth/login")
     return client.post("/auth/login", data={
+        "csrf_token": token,
         "email": email, "password": password,
     }, follow_redirects=False)
 
@@ -135,6 +153,20 @@ def admin2(flask_app, _seed_users):
     r = _login(c, _seed_users["admin2_email"])
     assert r.status_code == 302
     return c
+
+
+def csrf_headers(client) -> dict:
+    """Return a dict of headers including X-CSRFToken, ready to attach to any
+    non-GET client.post/patch/delete. Fetches the token from an authenticated
+    page (which always emits the CSRF meta tag). Falls back to /auth/login for
+    anonymous clients (login page emits the form-hidden token)."""
+    for probe in ("/live-bids", "/auth/login"):
+        r = client.get(probe, follow_redirects=False)
+        if r.status_code == 200:
+            m = _CSRF_META.search(r.data) or _CSRF_FORM.search(r.data)
+            if m:
+                return {"X-CSRFToken": m.group(1).decode()}
+    raise AssertionError("no CSRF token available from any probe page")
 
 
 @pytest.fixture

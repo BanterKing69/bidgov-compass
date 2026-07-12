@@ -990,3 +990,34 @@ body.app-shell {
 }
 .dataops-row .field { min-width: 200px; }
 
+/* Track button on tender-row (admin-only, rendered by table.js) */
+.tender-track {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 22px; height: 22px;
+  padding: 0;
+  margin-right: 8px;
+  font-family: var(--f-head); font-weight: 600; font-size: 14px;
+  line-height: 1;
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  background: var(--card);
+  color: var(--gov);
+  cursor: pointer;
+  transition: background var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease);
+  vertical-align: middle;
+}
+.tender-track:hover { background: var(--gov-strong); color: var(--card); border-color: var(--gov-strong); }
+.tender-track.is-tracked { background: var(--success); border-color: var(--success); color: #fff; cursor: default; }
+
+/* Smaller field variant used for inline editing on the pipeline table */
+.field--sm { padding: 4px 8px; font-size: 13px; height: auto; }
+
+/* Pipeline add-search results dropdown */
+.pipe-add__row {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 8px 6px;
+  border-bottom: 1px solid var(--line);
+  gap: var(--space-sm);
+}
+.pipe-add__row:last-child { border-bottom: none; }
+

@@ -16,6 +16,7 @@
   <p class="auth-lede">Get instant access to UK &amp; EU tender intelligence — normalised, categorised, always live.</p>
 
   <form method="POST" class="auth-form" autocomplete="on">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
     <label for="name">Name <span style="color:var(--muted);text-transform:none;font-weight:400">(optional)</span></label>
     <input id="name" name="name" type="text" value="{{ name or '' }}" autocomplete="name" />
 

@@ -5,6 +5,7 @@
   <p class="auth-lede">Signed in as <b>{{ user.email }}</b>{% if user.is_admin %} &middot; <span style="color:var(--bid);font-weight:600">Admin</span>{% endif %}</p>
 
   <form method="POST" class="auth-form" autocomplete="off">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
     <input type="hidden" name="action" value="change_password" />
 
     <label for="current_password">Current password</label>

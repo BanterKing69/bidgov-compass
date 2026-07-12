@@ -20,6 +20,11 @@ export function rowHtml(t) {
   const dlCls = urgency === 'today' || urgency === 'week' ? 'is-urgent'
               : urgency === 'month' ? 'is-soon' : '';
   const rel = fmtRelDeadline(t.deadline);
+  // "Track" — admin-only. Server sets data-is-admin="1" on <body> for admins.
+  const isAdmin = document.body.dataset.isAdmin === '1';
+  const trackBtn = isAdmin
+    ? `<button class="tender-track" data-track-uid="${escapeHtml(t.uid || '')}" title="Track in pipeline" aria-label="Track">＋</button>`
+    : '';
   const link = t.notice_url
     ? `<a href="${escapeHtml(t.notice_url)}" target="_blank" rel="noopener" title="Open notice on source portal">${escapeHtml(t.title)}</a>`
     : escapeHtml(t.title);
@@ -33,13 +38,49 @@ export function rowHtml(t) {
     : `<span class="muted">–</span>`;
 
   return `<tr>
-    <td class="title">${link}</td>
+    <td class="title">${trackBtn}${link}</td>
     <td>${escapeHtml(t.buyer_name || '')}</td>
     <td>${t.category ? `<span class="pill pill--cat">${escapeHtml(t.category)}</span>` : '<span class="muted">–</span>'}</td>
     <td class="num">${value}</td>
     <td class="${dlCls}">${deadline}</td>
     <td><span class="pill pill--src">${escapeHtml(t.source)}</span></td>
   </tr>`;
+}
+
+/**
+ * Wire admin-only "Track" buttons in a table body. Prompts for client name
+ * and POSTs to /api/admin/pipeline. Non-admin bodies contain no buttons so
+ * this is a no-op for non-admins. Idempotent — safe to call after each
+ * table re-render.
+ */
+export function wireTrackButtons(tbodySelector, refreshOnAdd = null) {
+  if (document.body.dataset.isAdmin !== '1') return;
+  const tbody = document.querySelector(tbodySelector);
+  if (!tbody || tbody._trackWired) return;
+  tbody._trackWired = true;
+  tbody.addEventListener('click', async (e) => {
+    const btn = e.target.closest('.tender-track');
+    if (!btn) return;
+    e.preventDefault();
+    e.stopPropagation();
+    const uid = btn.dataset.trackUid;
+    const clientName = prompt('Client name for this deal?');
+    if (!clientName) return;
+    btn.disabled = true;
+    try {
+      // Dynamic import so non-admin page bundles don't pull api.js twice.
+      const { api } = await import('./api.js');
+      const r = await api('/api/admin/pipeline', {
+        json: { tender_uid: uid, client_name: clientName },
+      });
+      if (r && r.ok) {
+        btn.textContent = '✓';
+        btn.classList.add('is-tracked');
+        if (typeof refreshOnAdd === 'function') refreshOnAdd();
+      }
+    } catch (_) { /* toast surfaced by api() */ }
+    finally { btn.disabled = false; }
+  });
 }
 
 /**

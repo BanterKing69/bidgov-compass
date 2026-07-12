@@ -56,14 +56,14 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Poppins:wght@600;700&display=swap" rel="stylesheet">
 
-  {# CSRF meta placeholder — populated in Phase 4 when Flask-WTF lands. Kept
-     empty for now so page JS that already reads it defaults to no header. #}
-  <meta name="csrf-token" content="" />
+  {# CSRF token — populated by app.py's context processor. Frontend api.js
+     reads this and attaches X-CSRFToken to every non-GET fetch. #}
+  <meta name="csrf-token" content="{{ csrf_token() }}" />
 
   <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}" />
   {% block page_head %}{% endblock %}
 </head>
-<body class="app-shell">
+<body class="app-shell"{% if user and user.is_authenticated and user.is_admin %} data-is-admin="1"{% endif %}>
 
   {# ============================== ICON RAIL (desktop ≥768px) ============== #}
   <nav class="rail" aria-label="Primary">
