@@ -128,7 +128,8 @@ input, select, button, textarea { font: inherit; color: inherit; }
 .topbar__actions { margin-left: auto; display: flex; gap: 10px; align-items: center; }
 .topbar__meta { color: rgba(255,255,255,.7); font-size: 12px; margin-right: 6px; }
 
-/* Top-bar primary nav (Opportunities ⇄ Won Contracts) */
+/* Top-bar primary nav (pre-refactor; retained for backward-compat with the
+   old dashboard.html topnav which is no longer rendered by the shell) */
 .topnav { display: flex; gap: 4px; margin-left: var(--space-md); }
 .topnav__link {
   padding: 7px 14px;

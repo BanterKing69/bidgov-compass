@@ -4,7 +4,7 @@
    The topbar/topnav has moved to the rail (in _app_base.html).
    Element IDs and script wiring preserved so awards.js works untouched. #}
 
-{% block title %}Won Contracts · BidGov Compass{% endblock %}
+{% block title %}History · BidGov Compass{% endblock %}
 
 {% block page_head %}
   <!-- Chart.js -->
@@ -15,7 +15,8 @@
 
 <!-- ============================== PAGE HEADER ============================== -->
 <header class="page-header">
-  <h1 class="page-header__title">Won Contracts</h1>
+  <h1 class="page-header__title">History</h1>
+  <span class="page-header__meta" aria-hidden="true">Awarded contract notices from all suppliers</span>
   <div class="page-header__actions">
     <span id="lastUpdated" class="page-header__meta"></span>
     {# Export buttons removed in Phase 2 — /api/export becomes admin-only in

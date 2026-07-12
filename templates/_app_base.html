@@ -4,7 +4,7 @@
    Every logged-in portal page extends this. Provides:
      * <head> with fonts, favicon, style.css, CSRF meta placeholder (Phase 4).
      * Fixed left icon rail (72px, ≥768px) with 5 items:
-         Live bids · Won contracts · Search · Dashboard · Admin
+         Live bids · History · Search · Dashboard · Admin
        Admin item only rendered when current_user.is_admin (server-side).
      * Mobile bottom nav (<768px) mirroring the same items with ≥44px targets.
      * Active state via request.path; aria-current="page" on the active item.
@@ -25,7 +25,10 @@
 
 {# --- icon macros: defined once, used in both the rail and the bottom nav --- #}
 {% macro icon_radio() %}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4.9 19.1C1 15.2 1 8.8 4.9 4.9"/><path d="M7.8 16.2c-2.3-2.3-2.3-6.1 0-8.5"/><circle cx="12" cy="12" r="2"/><path d="M16.2 7.8c2.3 2.3 2.3 6.1 0 8.5"/><path d="M19.1 4.9C23 8.8 23 15.2 19.1 19.1"/></svg>{% endmacro %}
-{% macro icon_trophy() %}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/><path d="M4 22h16"/><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"/><path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"/><path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"/></svg>{% endmacro %}
+{# History icon (lucide "history") — chosen over Trophy for the /awards rail
+   item so it doesn't imply "wins by the user"; these are historical award
+   notices from any supplier. #}
+{% macro icon_history() %}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l4 2"/></svg>{% endmacro %}
 {% macro icon_search() %}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>{% endmacro %}
 {% macro icon_dashboard() %}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="7" height="9" x="3" y="3" rx="1"/><rect width="7" height="5" x="14" y="3" rx="1"/><rect width="7" height="9" x="14" y="12" rx="1"/><rect width="7" height="5" x="3" y="16" rx="1"/></svg>{% endmacro %}
 {% macro icon_shield() %}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/></svg>{% endmacro %}
@@ -72,7 +75,7 @@
     </a>
 
     {{ nav_item('rail__item', '/live-bids', 'Live bids',      icon_radio(),     path) }}
-    {{ nav_item('rail__item', '/awards',    'Won contracts',  icon_trophy(),    path) }}
+    {{ nav_item('rail__item', '/awards',    'History',        icon_history(),   path) }}
     {{ nav_item('rail__item', '/',          'Search',         icon_search(),    path) }}
     {{ nav_item('rail__item', '/dashboard', 'Dashboard',      icon_dashboard(), path) }}
     {% if user and user.is_authenticated and user.is_admin %}
@@ -111,7 +114,7 @@
   {# ============================== BOTTOM NAV (<768px) ===================== #}
   <nav class="bottomnav" aria-label="Primary mobile navigation">
     {{ nav_item('bottomnav__item', '/live-bids', 'Live bids',     icon_radio(),     path) }}
-    {{ nav_item('bottomnav__item', '/awards',    'Won contracts', icon_trophy(),    path) }}
+    {{ nav_item('bottomnav__item', '/awards',    'History',       icon_history(),   path) }}
     {{ nav_item('bottomnav__item', '/',          'Search',        icon_search(),    path) }}
     {{ nav_item('bottomnav__item', '/dashboard', 'Dashboard',     icon_dashboard(), path) }}
     {% if user and user.is_authenticated and user.is_admin %}

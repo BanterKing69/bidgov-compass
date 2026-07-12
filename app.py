@@ -484,7 +484,7 @@ def api_aggregate():
 
 
 # --------------------------------------------------------------------------- #
-# Awards ("Won contracts") — parallel routes that scope to notice_stage='award'
+# Awards ("History" tab in the portal) — parallel routes that scope to notice_stage='award'
 # --------------------------------------------------------------------------- #
 @app.route("/awards")
 def awards_page():

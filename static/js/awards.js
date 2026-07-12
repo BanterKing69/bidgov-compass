@@ -1,4 +1,4 @@
-/* BidGov Compass — Won Contracts (awards) screen
+/* BidGov Compass — History screen (awards / notice_stage='award')
    ----------------------------------------------------------------------- */
 (() => {
   'use strict';

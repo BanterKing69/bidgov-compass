@@ -46,7 +46,7 @@ Five icon-rail routes, split by audience:
 | Rail icon | Route | Access | What it does |
 |---|---|---|---|
 | Live bids | `/live-bids` | any user | Open tenders only, urgency-forward (deadline ≤7d in red). Server-locked `deadline >= now` — the "is_open" flag goes stale between scrapes, so we compare deadlines at query time. |
-| Won contracts | `/awards` | any user | Awarded contracts view. Real supplier data. |
+| History | `/awards` | any user | Historical award notices (any supplier). Route kept as `/awards` to preserve any external links; the rail label is "History" to avoid implying "contracts YOU won". |
 | Search | `/` | any user | Full explorer: sidebar filters, Table · Pivot · Ask-the-data tabs, Excel-style column popovers, shareable filter URLs (state mirrored to `?query`). |
 | Dashboard | `/dashboard` | any user | KPIs + five Chart.js charts. "Closing ≤7 days" is red. |
 | Admin | `/admin` | `is_admin=1` only | Sales console. Icon is server-side conditional — non-admins never see it. |
