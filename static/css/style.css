@@ -660,3 +660,364 @@ table.tenders thead th.num .col-sort { padding-left: 6px; }
   .layout { grid-template-columns: 1fr; }
   .sidebar { border-right: none; border-bottom: 1px solid var(--line); }
 }
+
+
+/* =========================================================================
+   App shell (Phase 1) — icon rail + mobile bottom nav
+   All classes new, only existing tokens used (var(--gov) etc.).
+   Body opts in with class="app-shell"; auth pages skip it.
+   ========================================================================= */
+
+body.app-shell {
+  display: grid;
+  grid-template-columns: 72px 1fr;
+  min-height: 100vh;
+}
+
+/* --- rail (desktop ≥768px) ---------------------------------------------- */
+.rail {
+  position: sticky; top: 0;
+  align-self: start;
+  height: 100vh;
+  width: 72px;
+  background: var(--card);
+  border-right: 1px solid var(--line);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: var(--space-md) 0;
+  gap: var(--space-sm);
+  z-index: 40;
+}
+.rail__logo {
+  display: flex; align-items: center; justify-content: center;
+  width: 40px; height: 40px;
+  border-radius: var(--radius);
+  overflow: hidden;
+  margin-bottom: var(--space-sm);
+}
+.rail__logo img { width: 100%; height: 100%; object-fit: cover; display: block; }
+
+.rail__item {
+  width: 44px; height: 44px;
+  display: flex; align-items: center; justify-content: center;
+  border-radius: var(--radius);
+  color: var(--gov);
+  text-decoration: none;
+  transition: background var(--dur-fast) var(--ease),
+              color      var(--dur-fast) var(--ease);
+}
+.rail__item:hover { background: var(--bg); color: var(--gov-strong); text-decoration: none; }
+.rail__item:focus-visible { outline: 2px solid var(--bid); outline-offset: 2px; }
+.rail__item.is-active {
+  background: var(--gov-strong);
+  color: var(--bid);
+}
+.rail__item svg {
+  width: 22px; height: 22px;
+  stroke-width: 1.75;
+  display: block;
+}
+
+.rail__spacer { flex: 1; }
+
+.rail__foot {
+  width: 44px; height: 44px;
+  display: flex; align-items: center; justify-content: center;
+  border-radius: var(--radius);
+  color: var(--muted);
+  text-decoration: none;
+  transition: background var(--dur-fast) var(--ease),
+              color      var(--dur-fast) var(--ease);
+}
+.rail__foot:hover { background: var(--bg); color: var(--gov); text-decoration: none; }
+.rail__foot:focus-visible { outline: 2px solid var(--bid); outline-offset: 2px; }
+.rail__foot svg { width: 20px; height: 20px; stroke-width: 1.75; }
+
+/* --- shell main column -------------------------------------------------- */
+.shell-main {
+  min-width: 0;             /* let grid children shrink so tables can scroll */
+  display: flex;
+  flex-direction: column;
+}
+
+/* --- flash messages (surface on any shell page) -------------------------- */
+.flashes {
+  display: flex; flex-direction: column; gap: var(--space-sm);
+  padding: var(--space-md) var(--space-lg) 0;
+}
+.flash {
+  padding: 10px 14px;
+  border-radius: var(--radius-sm);
+  font-size: 14px;
+  background: var(--card);
+  border: 1px solid var(--line);
+  color: var(--gov);
+}
+.flash--error {
+  background: var(--bid-tint);
+  border-color: var(--bid);
+  color: var(--bid-hover);
+}
+.flash--success {
+  background: #EEF6F0;
+  border-color: var(--success);
+  color: var(--success);
+}
+
+/* --- bottom nav (mobile <768px) ----------------------------------------- */
+.bottomnav {
+  display: none;
+  position: fixed; left: 0; right: 0; bottom: 0;
+  height: 60px;
+  background: var(--card);
+  border-top: 1px solid var(--line);
+  padding: 0 var(--space-sm);
+  justify-content: space-around;
+  align-items: center;
+  z-index: 40;
+  box-shadow: 0 -1px 3px rgba(84, 86, 91, .05);
+}
+.bottomnav__item {
+  min-width: 44px; height: 44px;                /* ≥44px touch target */
+  display: flex; align-items: center; justify-content: center;
+  color: var(--gov);
+  text-decoration: none;
+  border-radius: var(--radius);
+  transition: color var(--dur-fast) var(--ease);
+}
+.bottomnav__item.is-active { color: var(--bid); }
+.bottomnav__item:focus-visible { outline: 2px solid var(--bid); outline-offset: 2px; }
+.bottomnav__item svg { width: 24px; height: 24px; stroke-width: 1.75; display: block; }
+
+/* --- responsive switch --------------------------------------------------- */
+@media (max-width: 767px) {
+  body.app-shell {
+    grid-template-columns: 1fr;
+    padding-bottom: 60px;                        /* clear the bottom nav */
+  }
+  .rail { display: none; }
+  .bottomnav { display: flex; }
+}
+
+
+/* =========================================================================
+   Page header — used inside the shell content column (Phase 1)
+   Replaces the deleted per-page .topbar; hosts page title + right actions
+   (e.g. lastUpdated, Scrape / Export buttons on / and /awards until Phase 3).
+   ========================================================================= */
+
+.page-header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+  padding: var(--space-md) var(--space-lg);
+  background: var(--card);
+  border-bottom: 1px solid var(--line);
+}
+.page-header__title {
+  margin: 0;
+  font-family: var(--f-head);
+  font-weight: 600;
+  font-size: 20px;
+  color: var(--gov-strong);
+  letter-spacing: -0.01em;
+}
+.page-header__title .accent { color: var(--bid); }
+.page-header__actions {
+  margin-left: auto;
+  display: flex; gap: 10px; align-items: center;
+  flex-wrap: wrap;
+}
+.page-header__meta {
+  color: var(--muted);
+  font-size: 12px;
+  margin-right: 6px;
+}
+@media (max-width: 767px) {
+  .page-header { padding: var(--space-sm) var(--space-md); }
+  .page-header__title { font-size: 16px; }
+}
+
+
+/* =========================================================================
+   Live bids page (Phase 2) — slim filter bar + KPI strip + table
+   ========================================================================= */
+
+.lb-page,
+.dash-page {
+  padding: var(--space-lg);
+  display: flex; flex-direction: column;
+  gap: var(--space-lg);
+}
+@media (max-width: 767px) {
+  .lb-page, .dash-page { padding: var(--space-md); gap: var(--space-md); }
+}
+
+/* KPI strip: reuse the existing .kpis grid. On live-bids and dashboard-page
+   we want tighter spacing since they're the whole point of the page. */
+.lb-kpis, .dash-kpis { margin-bottom: 0; }
+
+/* Filter bar (Search sidebar not appropriate — this is a slim horizontal row) */
+.lb-filterbar { padding: var(--space-md); }
+.lb-filterbar__row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-sm);
+}
+.lb-filterbar__row + .lb-filterbar__row {
+  margin-top: var(--space-md);
+  padding-top: var(--space-md);
+  border-top: 1px solid var(--line);
+}
+.lb-filterbar__row--chips {
+  align-items: flex-start;
+  flex-direction: column;
+  gap: var(--space-md);
+}
+.lb-filterbar__row .field { max-width: 260px; }
+.lb-filterbar__row .field--range { display: inline-flex; gap: 6px; align-items: center; }
+.lb-filterbar__row .field--range .field { max-width: 110px; }
+
+.lb-chipgroup { width: 100%; }
+.lb-chipgroup__label {
+  font-family: var(--f-body);
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  margin-bottom: 6px;
+}
+
+.chiplist {
+  display: flex; flex-wrap: wrap; gap: 6px;
+}
+.chip {
+  display: inline-flex; align-items: center;
+  padding: 4px 10px;
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-pill);
+  font-size: 12px;
+  color: var(--gov);
+  cursor: pointer;
+  transition: background var(--dur-fast) var(--ease),
+              border-color var(--dur-fast) var(--ease),
+              color var(--dur-fast) var(--ease);
+  user-select: none;
+}
+.chip input[type="checkbox"] { display: none; }
+.chip:hover { border-color: var(--line-strong); }
+.chip:has(input:checked) {
+  background: var(--gov-strong);
+  border-color: var(--gov-strong);
+  color: var(--card);
+}
+
+
+/* =========================================================================
+   Admin console (Phase 3) — /admin single page with 4 tabs
+   ========================================================================= */
+
+.admin { padding: var(--space-lg); display: flex; flex-direction: column; gap: var(--space-lg); }
+@media (max-width: 767px) { .admin { padding: var(--space-md); gap: var(--space-md); } }
+
+.admin-kpis { margin-bottom: 0; }
+
+.admin-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-lg);
+}
+@media (max-width: 900px) {
+  .admin-grid { grid-template-columns: 1fr; }
+}
+
+.chart-wrap--sm { min-height: 240px; }
+
+/* Users tab */
+.users-tbl th, .users-tbl td { padding: 10px var(--space-sm); }
+.users-actions { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+.users-actions [data-danger="1"] { border-color: var(--bid); color: var(--bid); }
+.users-actions [data-danger="1"]:hover { background: var(--bid-tint); }
+
+/* Pipeline tab */
+.pipeline-toolbar {
+  display: flex; align-items: center; gap: var(--space-sm);
+  padding: var(--space-md); border-bottom: 1px solid var(--line);
+  flex-wrap: wrap;
+}
+.pipeline-toolbar .field { flex: 1; min-width: 260px; max-width: 480px; }
+.pipe-add-results {
+  padding: var(--space-sm) var(--space-md);
+  border-bottom: 1px solid var(--line);
+  max-height: 240px; overflow-y: auto;
+}
+
+/* Funnel widget on Overview */
+.funnel { padding: var(--space-md); display: flex; flex-direction: column; gap: 6px; }
+.funnel__row {
+  display: flex; align-items: center; gap: var(--space-sm);
+  font-family: var(--f-body); font-size: 13px;
+}
+.funnel__label { width: 100px; color: var(--gov); }
+.funnel__bar {
+  flex: 1; height: 22px;
+  background: var(--bg); border-radius: var(--radius-sm);
+  overflow: hidden; position: relative;
+}
+.funnel__fill {
+  height: 100%;
+  background: var(--gov-strong);
+  transition: width var(--dur) var(--ease);
+}
+.funnel__count {
+  width: 44px; text-align: right;
+  font-variant-numeric: tabular-nums;
+  color: var(--gov-strong); font-weight: 500;
+}
+
+/* Data-ops rows */
+.dataops-row {
+  display: flex; align-items: flex-end; gap: var(--space-md);
+  padding: var(--space-md); flex-wrap: wrap;
+}
+.dataops-row label {
+  display: flex; flex-direction: column; gap: 4px;
+  font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: .05em;
+}
+.dataops-row .field { min-width: 200px; }
+
+/* Track button on tender-row (admin-only, rendered by table.js) */
+.tender-track {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 22px; height: 22px;
+  padding: 0;
+  margin-right: 8px;
+  font-family: var(--f-head); font-weight: 600; font-size: 14px;
+  line-height: 1;
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  background: var(--card);
+  color: var(--gov);
+  cursor: pointer;
+  transition: background var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease);
+  vertical-align: middle;
+}
+.tender-track:hover { background: var(--gov-strong); color: var(--card); border-color: var(--gov-strong); }
+.tender-track.is-tracked { background: var(--success); border-color: var(--success); color: #fff; cursor: default; }
+
+/* Smaller field variant used for inline editing on the pipeline table */
+.field--sm { padding: 4px 8px; font-size: 13px; height: auto; }
+
+/* Pipeline add-search results dropdown */
+.pipe-add__row {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 8px 6px;
+  border-bottom: 1px solid var(--line);
+  gap: var(--space-sm);
+}
+.pipe-add__row:last-child { border-bottom: none; }
+

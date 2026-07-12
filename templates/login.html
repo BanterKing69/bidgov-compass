@@ -5,6 +5,7 @@
   <p class="auth-lede">Access your tender intelligence dashboard.</p>
 
   <form method="POST" class="auth-form" autocomplete="on">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}" />
     <label for="email">Email</label>
     <input id="email" name="email" type="email" required autofocus
            value="{{ email or '' }}" autocomplete="email" />
@@ -22,7 +23,9 @@
     <button type="submit" class="auth-submit">Sign in</button>
   </form>
 
+  {% if signup_allowed() %}
   <div class="auth-foot">
     New here? <a href="{{ url_for('auth.signup') }}">Create an account</a>
   </div>
+  {% endif %}
 {% endblock %}

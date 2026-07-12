@@ -15,6 +15,7 @@ from flask import (
     Flask, Response, jsonify, render_template, request, send_file, abort
 )
 from flask_login import login_required, current_user
+from flask_wtf.csrf import CSRFProtect, generate_csrf
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.path.insert(0, str(Path(__file__).resolve().parent / "collectors"))
@@ -22,10 +23,33 @@ sys.path.insert(0, str(Path(__file__).resolve().parent / "collectors"))
 import db  # noqa: E402
 import chat as chat_mod  # noqa: E402
 import auth  # noqa: E402
+import admin  # noqa: E402
 
 APP_ROOT = Path(__file__).resolve().parent
 app = Flask(__name__, template_folder="templates", static_folder="static")
 auth.init_app(app)
+admin.init_app(app)
+
+# --------------------------------------------------------------------------- #
+# CSRF (Phase 4) — required on every state-changing method (POST/PATCH/DELETE/PUT).
+# The frontend api.js helper reads <meta name="csrf-token"> and attaches
+# X-CSRFToken automatically on non-GET requests. Only /health is exempt so
+# platform health checks (Render, load balancers) can hit it without a token.
+# --------------------------------------------------------------------------- #
+csrf = CSRFProtect(app)
+
+
+@app.context_processor
+def _inject_csrf_token():
+    """Populate the empty `<meta name="csrf-token" content="">` placeholder
+    in _app_base.html so the frontend can attach X-CSRFToken to every non-GET
+    fetch."""
+    return {"csrf_token": generate_csrf}
+
+
+# The health check is called by Render / uptime monitors without a session;
+# it's a read-only GET but CSRFProtect only guards state-changers anyway, so
+# no exemption needed. Left as-is.
 
 # --------------------------------------------------------------------------- #
 # Scrape job state (in-memory; one job at a time)
@@ -101,7 +125,24 @@ def _require_login():
 # --------------------------------------------------------------------------- #
 @app.route("/")
 def home():
+    # / is the Search screen (full explorer). Endpoint name preserved so the
+    # existing url_for('home') references (auth redirects, templates) keep
+    # resolving.
     return render_template("dashboard.html", user=current_user)
+
+
+@app.route("/live-bids")
+def live_bids():
+    # Live bids page — client-facing, urgency-forward view of open tenders.
+    # Server-side locks deadline >= now on every /api/live-tenders call;
+    # this page just renders the shell.
+    return render_template("live_bids.html", user=current_user)
+
+
+@app.route("/dashboard")
+def dashboard_page():
+    # Dashboard page — KPI row + the five Chart.js charts, moved off /.
+    return render_template("dashboard_page.html", user=current_user)
 
 
 # --- filters + table ----------------------------------------------------- #
@@ -241,6 +282,72 @@ def api_tenders():
     finally:
         conn.close()
     return jsonify({"total": total, "returned": len(rows), "rows": rows})
+
+
+# --------------------------------------------------------------------------- #
+# Live-bids API — same table + columns as /api/tenders, but with a hardcoded
+# server-side "deadline >= now" clause the client cannot remove. is_open is
+# set at collection time and goes stale (verified: DB has ~5 rows where
+# is_open=1 but deadline has already passed), so we compare deadline to
+# datetime('now') at query time. SQLite compares ISO 8601 strings lexically
+# — safe for the well-formed ISO deadlines our normaliser produces.
+# --------------------------------------------------------------------------- #
+def _build_live_where(args):
+    """Same as _build_where(stage='tender') but always AND'd with
+    `deadline IS NOT NULL AND deadline >= datetime('now')`. Returns (where, params).
+    """
+    where, params = _build_where(args)
+    # _build_where always emits WHERE ... for stage='tender' (at least the
+    # notice_stage clause is present), so we can safely append with AND.
+    where = where + " AND deadline IS NOT NULL AND deadline >= datetime('now')"
+    return where, params
+
+
+@app.route("/api/live-tenders")
+def api_live_tenders():
+    where, params = _build_live_where(request.args)
+    sort = _ALLOWED_SORT.get(request.args.get("sort", "deadline"),
+                             _ALLOWED_SORT["deadline"])
+    limit = min(int(request.args.get("limit", 500)), 5000)
+    cols = ("uid,source,title,category,cpv_code,buyer_name,buyer_region,"
+            "value_amount,value_currency,published_date,deadline,status,"
+            "is_open,notice_url")
+    conn = db.connect()
+    try:
+        cur = conn.execute(
+            f"SELECT {cols} FROM tenders {where} ORDER BY {sort} LIMIT ?",
+            [*params, limit],
+        )
+        col_names = [d[0] for d in cur.description]
+        rows = [dict(zip(col_names, r)) for r in cur.fetchall()]
+        total_cur = conn.execute(f"SELECT COUNT(*) FROM tenders {where}", params)
+        total = total_cur.fetchone()[0]
+    finally:
+        conn.close()
+    return jsonify({"total": total, "returned": len(rows), "rows": rows})
+
+
+@app.route("/api/live-stats")
+def api_live_stats():
+    """KPI-strip payload for the Live bids page: open count, total open value,
+    closing ≤7d count. Honours the same filter params /api/live-tenders accepts."""
+    where, params = _build_live_where(request.args)
+    conn = db.connect()
+    try:
+        row = conn.execute(
+            f"SELECT COUNT(*), "
+            f"       ROUND(COALESCE(SUM(value_amount), 0)), "
+            f"       SUM(CASE WHEN deadline <= datetime('now', '+7 days') THEN 1 ELSE 0 END) "
+            f"FROM tenders {where}",
+            params,
+        ).fetchone()
+    finally:
+        conn.close()
+    return jsonify({
+        "open_count":       row[0] or 0,
+        "total_open_value": row[1] or 0,
+        "closing_7d":       row[2] or 0,
+    })
 
 
 # --------------------------------------------------------------------------- #
@@ -453,11 +560,30 @@ def api_stats():
                 ELSE '3+ months' END AS k,
                 COUNT(*) AS n
             FROM tenders {where} GROUP BY k""")
-        # Basic counts + sum
+        # Basic counts + sum. `open` uses is_open (heuristic, cheap) — accurate
+        # enough for the summary KPI; the definitive "live" count lives at
+        # /api/live-stats.
         totals = conn.execute(
             f"SELECT COUNT(*), SUM(is_open), "
             f"       ROUND(COALESCE(SUM(value_amount),0)) "
             f"FROM tenders {where}", params).fetchone()
+
+        # closing_7d — run as a SEPARATE, independent query so it uses the
+        # authoritative `notice_stage='tender' AND deadline >= now` semantics
+        # (same as /api/live-tenders + /api/live-stats). If we left this
+        # inside the outer WHERE, it would inherit the default is_open=1
+        # scope and drop rows where is_open=1 but the deadline has passed
+        # (the exact stale-row bug _build_live_where guards against).
+        # This keeps the Dashboard "Closing ≤ 7 days" KPI equal to the
+        # Live-bids KPI for the same phrase — one truth, one number.
+        closing_7d_row = conn.execute(
+            "SELECT COUNT(*) FROM tenders "
+            "WHERE notice_stage='tender' "
+            "  AND deadline IS NOT NULL "
+            "  AND deadline >= datetime('now') "
+            "  AND deadline <= datetime('now', '+7 days')"
+        ).fetchone()
+        closing_7d = closing_7d_row[0] or 0
 
         # Median + P90 — much more informative than the mean for tender values
         # (heavy-tailed distribution, a handful of £bn frameworks skew the mean).
@@ -531,6 +657,7 @@ def api_stats():
         "totals": {
             "notices": totals[0], "open": totals[1] or 0,
             "total_value": totals[2] or 0,
+            "closing_7d": closing_7d,         # Independent of outer WHERE — matches /api/live-stats
             "median_value": median_value or 0,
             "p90_value": p90_value or 0,
             "sweet_spot_count": sweet_spot_count,
@@ -564,8 +691,11 @@ def api_pivot():
     return jsonify({"columns": cols, "rows": rows})
 
 
-# --- scrape controls ----------------------------------------------------- #
+# --- scrape controls (admin-only from Phase 3) --------------------------- #
+# The scrape hits third-party APIs and mutates the tenders store; only admins
+# can trigger and observe it. Non-admin GET/POST returns JSON 403.
 @app.route("/api/scrape", methods=["POST"])
+@auth.admin_required
 def api_scrape():
     global _scrape_state
     with _scrape_lock:
@@ -586,12 +716,18 @@ def api_scrape():
 
 
 @app.route("/api/scrape/status")
+@auth.admin_required
 def api_scrape_status():
     return jsonify(_scrape_state)
 
 
-# --- export -------------------------------------------------------------- #
+# --- export (admin-only from Phase 3) ----------------------------------- #
+# Full-store XLSX/CSV export — capable of streaming the entire 9k-row table.
+# Not something a paying client should be able to bulk-download; the admin
+# Data-ops tab exposes it with a scope picker (current filters / open only /
+# awards).
 @app.route("/api/export")
+@auth.admin_required
 def api_export():
     fmt = request.args.get("format", "xlsx")
     stage = request.args.get("stage", "tender")

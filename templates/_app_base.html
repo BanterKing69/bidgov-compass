@@ -1,0 +1,124 @@
+{# ==========================================================================
+   _app_base.html  —  shared app-shell layout (Phase 1)
+
+   Every logged-in portal page extends this. Provides:
+     * <head> with fonts, favicon, style.css, CSRF meta placeholder (Phase 4).
+     * Fixed left icon rail (72px, ≥768px) with 5 items:
+         Live bids · Won contracts · Search · Dashboard · Admin
+       Admin item only rendered when current_user.is_admin (server-side).
+     * Mobile bottom nav (<768px) mirroring the same items with ≥44px targets.
+     * Active state via request.path; aria-current="page" on the active item.
+     * Flash messages surface.
+     * Blocks: `title`, `page_head` (extra <head>), `content`, `page_js`.
+
+   Notes for reviewers:
+     * SVG icons are inline lucide-react shapes — no icon dependency.
+     * `user` is expected to be passed via render_template("...", user=current_user)
+       — falls back to `current_user` if a caller forgets, since flask_login
+       makes it globally available in templates.
+     * URLs are hardcoded (/live-bids, /dashboard, /admin) rather than url_for
+       so Phase 1 can render before Phase 2/3 endpoints exist. Clicking any not-
+       yet-implemented route yields a 404 until its phase lands.
+========================================================================= #}
+{% set user = user if user is defined else current_user %}
+{% set path = request.path %}
+
+{# --- icon macros: defined once, used in both the rail and the bottom nav --- #}
+{% macro icon_radio() %}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4.9 19.1C1 15.2 1 8.8 4.9 4.9"/><path d="M7.8 16.2c-2.3-2.3-2.3-6.1 0-8.5"/><circle cx="12" cy="12" r="2"/><path d="M16.2 7.8c2.3 2.3 2.3 6.1 0 8.5"/><path d="M19.1 4.9C23 8.8 23 15.2 19.1 19.1"/></svg>{% endmacro %}
+{% macro icon_trophy() %}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/><path d="M4 22h16"/><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"/><path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"/><path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"/></svg>{% endmacro %}
+{% macro icon_search() %}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>{% endmacro %}
+{% macro icon_dashboard() %}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="7" height="9" x="3" y="3" rx="1"/><rect width="7" height="5" x="14" y="3" rx="1"/><rect width="7" height="9" x="14" y="12" rx="1"/><rect width="7" height="5" x="3" y="16" rx="1"/></svg>{% endmacro %}
+{% macro icon_shield() %}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/></svg>{% endmacro %}
+{% macro icon_user() %}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>{% endmacro %}
+{% macro icon_external() %}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/></svg>{% endmacro %}
+
+{# --- one nav-item component reused for rail + bottom nav --- #}
+{% macro nav_item(cls, href, label, icon, active_path) %}
+  {%- set is_active = (active_path == href) or (href != '/' and active_path.startswith(href + '/')) -%}
+  <a class="{{ cls }}{% if is_active %} is-active{% endif %}"
+     href="{{ href }}"
+     aria-label="{{ label }}"
+     {%- if is_active %} aria-current="page"{% endif %}>
+    {{ icon }}
+  </a>
+{%- endmacro %}
+
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>{% block title %}BidGov Compass{% endblock %}</title>
+  <link rel="icon" href="{{ url_for('static', filename='img/logo.jpeg') }}" />
+
+  <!-- Google Fonts: Poppins + Inter -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Poppins:wght@600;700&display=swap" rel="stylesheet">
+
+  {# CSRF token — populated by app.py's context processor. Frontend api.js
+     reads this and attaches X-CSRFToken to every non-GET fetch. #}
+  <meta name="csrf-token" content="{{ csrf_token() }}" />
+
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}" />
+  {% block page_head %}{% endblock %}
+</head>
+<body class="app-shell"{% if user and user.is_authenticated and user.is_admin %} data-is-admin="1"{% endif %}>
+
+  {# ============================== ICON RAIL (desktop ≥768px) ============== #}
+  <nav class="rail" aria-label="Primary">
+    <a class="rail__logo" href="/" aria-label="BidGov Compass home">
+      <img src="{{ url_for('static', filename='img/logo.jpeg') }}" alt="" />
+    </a>
+
+    {{ nav_item('rail__item', '/live-bids', 'Live bids',      icon_radio(),     path) }}
+    {{ nav_item('rail__item', '/awards',    'Won contracts',  icon_trophy(),    path) }}
+    {{ nav_item('rail__item', '/',          'Search',         icon_search(),    path) }}
+    {{ nav_item('rail__item', '/dashboard', 'Dashboard',      icon_dashboard(), path) }}
+    {% if user and user.is_authenticated and user.is_admin %}
+      {{ nav_item('rail__item', '/admin', 'Admin', icon_shield(), path) }}
+    {% endif %}
+
+    <div class="rail__spacer"></div>
+
+    {% if user and user.is_authenticated %}
+      <a class="rail__foot" href="{{ url_for('auth.account') }}"
+         aria-label="Account" title="{{ user.name or user.email }}">
+        {{ icon_user() }}
+      </a>
+    {% endif %}
+    <a class="rail__foot" href="https://govbid.co.uk"
+       aria-label="Back to govbid.co.uk" title="Back to govbid.co.uk">
+      {{ icon_external() }}
+    </a>
+  </nav>
+
+  {# ============================== MAIN COLUMN ============================= #}
+  <div class="shell-main">
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+      <div class="flashes" role="status" aria-live="polite">
+        {% for category, msg in messages %}
+          <div class="flash flash--{{ category }}">{{ msg }}</div>
+        {% endfor %}
+      </div>
+      {% endif %}
+    {% endwith %}
+
+    {% block content %}{% endblock %}
+  </div>
+
+  {# ============================== BOTTOM NAV (<768px) ===================== #}
+  <nav class="bottomnav" aria-label="Primary mobile navigation">
+    {{ nav_item('bottomnav__item', '/live-bids', 'Live bids',     icon_radio(),     path) }}
+    {{ nav_item('bottomnav__item', '/awards',    'Won contracts', icon_trophy(),    path) }}
+    {{ nav_item('bottomnav__item', '/',          'Search',        icon_search(),    path) }}
+    {{ nav_item('bottomnav__item', '/dashboard', 'Dashboard',     icon_dashboard(), path) }}
+    {% if user and user.is_authenticated and user.is_admin %}
+      {{ nav_item('bottomnav__item', '/admin', 'Admin', icon_shield(), path) }}
+    {% endif %}
+  </nav>
+
+  {% block page_js %}{% endblock %}
+</body>
+</html>

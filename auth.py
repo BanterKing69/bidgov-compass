@@ -222,7 +222,9 @@ def login():
         # only allow same-site next redirects
         if next_url and not next_url.startswith("/"):
             next_url = None
-        return redirect(next_url or url_for("home"))
+        # Post-login default lands on /live-bids (the client hero screen —
+        # highest signal per screen). Explicit `?next=` still honoured.
+        return redirect(next_url or url_for("live_bids"))
     return render_template("login.html", email="")
 
 
@@ -230,6 +232,10 @@ def login():
 def signup():
     if current_user.is_authenticated:
         return redirect(url_for("home"))
+    if not signup_allowed():
+        # Friendly "invite-only" page — same template, just a flag it reads.
+        return render_template("signup.html", email="", name="",
+                               signup_disabled=True), 403
     if request.method == "POST":
         email = request.form.get("email", "").strip()
         name = request.form.get("name", "").strip()
@@ -275,6 +281,86 @@ def account():
 # --------------------------------------------------------------------------- #
 # Optional JSON helpers (used by API routes to fail cleanly)
 # --------------------------------------------------------------------------- #
+# --------------------------------------------------------------------------- #
+# Admin user-management helpers — read/mutate the users table.
+# All operations are guarded at the route layer by admin_required + the
+# self-action / last-admin guards in admin.py. These helpers do the raw
+# SQL; refuse-to-fire policy lives one layer up.
+# --------------------------------------------------------------------------- #
+def list_all_users() -> list[dict]:
+    conn = _conn()
+    try:
+        cur = conn.execute(
+            "SELECT id, email, name, is_admin, is_active, created_at, last_login_at "
+            "FROM users ORDER BY id ASC"
+        )
+        cols = [d[0] for d in cur.description]
+        rows = [dict(zip(cols, r)) for r in cur.fetchall()]
+        for r in rows:
+            r["is_admin"] = bool(r["is_admin"])
+            r["is_active"] = bool(r["is_active"])
+        return rows
+    finally:
+        conn.close()
+
+
+def count_active_admins() -> int:
+    conn = _conn()
+    try:
+        row = conn.execute(
+            "SELECT COUNT(*) FROM users WHERE is_admin = 1 AND is_active = 1"
+        ).fetchone()
+        return row[0] or 0
+    finally:
+        conn.close()
+
+
+def get_user_row(user_id: int) -> Optional[dict]:
+    conn = _conn()
+    try:
+        cur = conn.execute(
+            "SELECT id, email, name, is_admin, is_active FROM users WHERE id=?",
+            (user_id,),
+        )
+        r = cur.fetchone()
+        if not r: return None
+        return {"id": r[0], "email": r[1], "name": r[2],
+                "is_admin": bool(r[3]), "is_active": bool(r[4])}
+    finally:
+        conn.close()
+
+
+def _update_user_flag(user_id: int, field: str, value: int) -> bool:
+    """Toggle a boolean column on a user row. Returns True if a row was updated."""
+    assert field in ("is_admin", "is_active")
+    conn = _conn()
+    try:
+        cur = conn.execute(
+            f"UPDATE users SET {field}=? WHERE id=?", (int(value), user_id))
+        conn.commit()
+        return cur.rowcount > 0
+    finally:
+        conn.close()
+
+
+def set_user_active(user_id: int, active: bool) -> bool:
+    return _update_user_flag(user_id, "is_active", 1 if active else 0)
+
+
+def set_user_admin(user_id: int, admin: bool) -> bool:
+    return _update_user_flag(user_id, "is_admin", 1 if admin else 0)
+
+
+def delete_user_row(user_id: int) -> bool:
+    conn = _conn()
+    try:
+        cur = conn.execute("DELETE FROM users WHERE id=?", (user_id,))
+        conn.commit()
+        return cur.rowcount > 0
+    finally:
+        conn.close()
+
+
 def api_login_required(fn):
     """Like @login_required but returns JSON 401 instead of redirecting."""
     @wraps(fn)
@@ -283,6 +369,54 @@ def api_login_required(fn):
             return jsonify({"error": "auth_required"}), 401
         return fn(*args, **kwargs)
     return wrapper
+
+
+def admin_required(fn):
+    """Gate a route to admins only.
+
+    * `/api/*` paths return JSON 403 (`{"error": "admin_required"}`).
+    * Page paths flash a message and redirect to /live-bids (the client hero).
+    * Unauthenticated users are already caught by the global before_request
+      login gate — this only fires for authenticated non-admins.
+
+    Server-side conditional. No client-side hiding is trusted.
+    """
+    @wraps(fn)
+    def wrapper(*args, **kwargs):
+        if not current_user.is_authenticated:
+            # Should never happen (before_request handles it), but be safe.
+            if request.path.startswith("/api/"):
+                return jsonify({"error": "auth_required"}), 401
+            return redirect(url_for("auth.login", next=request.path))
+        if not current_user.is_admin:
+            if request.path.startswith("/api/"):
+                return jsonify({"error": "admin_required"}), 403
+            flash("Admin access required.", "error")
+            return redirect(url_for("live_bids"))
+        return fn(*args, **kwargs)
+    return wrapper
+
+
+# --------------------------------------------------------------------------- #
+# ALLOW_SIGNUP — env flag (default "1"). When "0"/"false"/etc the /auth/signup
+# route returns a friendly "invite-only" page and the "Create an account" link
+# on the login page hides. Toggling never blocks first-registrant bootstrap:
+# if the users table is empty the flag is bypassed so the admin can be created.
+# --------------------------------------------------------------------------- #
+def signup_allowed() -> bool:
+    if _users_empty():
+        return True  # first-registrant becomes admin — never lock out bootstrap
+    v = os.environ.get("ALLOW_SIGNUP", "1").strip().lower()
+    return v not in ("0", "false", "no", "off")
+
+
+def _users_empty() -> bool:
+    conn = _conn()
+    try:
+        row = conn.execute("SELECT COUNT(*) FROM users").fetchone()
+        return (row[0] or 0) == 0
+    finally:
+        conn.close()
 
 
 def init_app(app):
@@ -301,3 +435,9 @@ def init_app(app):
     app.register_blueprint(auth_bp)
     # ensure the users DB exists on boot
     _conn().close()
+
+    # Expose signup_allowed() to Jinja so the login template can hide the
+    # "Create an account" link when ALLOW_SIGNUP is off.
+    @app.context_processor
+    def _inject_signup_state():
+        return {"signup_allowed": signup_allowed}

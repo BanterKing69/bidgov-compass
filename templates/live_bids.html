@@ -1,0 +1,103 @@
+{% extends "_app_base.html" %}
+
+{# Phase 2: Live bids page — client hero screen. Deadline-forward, urgency-styled.
+   Server-side WHERE is locked to deadline >= now regardless of any client params
+   (see api_live_tenders in app.py). #}
+
+{% block title %}Live bids · BidGov Compass{% endblock %}
+
+{% block content %}
+
+<header class="page-header">
+  <h1 class="page-header__title">Live bids</h1>
+  <div class="page-header__actions">
+    <span class="page-header__meta" id="lbLastUpdated"></span>
+  </div>
+</header>
+
+<div class="lb-page">
+
+  {# ============================== KPI strip ============================== #}
+  <div class="kpis lb-kpis" role="region" aria-label="Live bids summary">
+    <div class="kpi">
+      <div class="kpi__label">Open tenders</div>
+      <div id="lbKpiOpen" class="kpi__value">–</div>
+      <div class="kpi__delta muted">Deadline in the future</div>
+    </div>
+    <div class="kpi">
+      <div class="kpi__label">Total open value</div>
+      <div id="lbKpiValue" class="kpi__value">–</div>
+      <div class="kpi__delta muted">Sum of published values (nominal)</div>
+    </div>
+    <div class="kpi kpi--accent">
+      <div class="kpi__label">Closing ≤ 7 days</div>
+      <div id="lbKpiClosing" class="kpi__value">–</div>
+      <div class="kpi__delta muted">Need attention this week</div>
+    </div>
+  </div>
+
+  {# ============================== Filter bar ============================= #}
+  <section class="lb-filterbar panel" aria-label="Filters">
+    <div class="lb-filterbar__row">
+      <input id="lbQ" class="field" type="search" placeholder="Search title / buyer…" aria-label="Search" />
+      <select id="lbDeadlineWindow" class="field" aria-label="Deadline window">
+        <option value="">Any deadline</option>
+        <option value="7">Closing ≤ 7 days</option>
+        <option value="14">Closing ≤ 14 days</option>
+        <option value="30">Closing ≤ 30 days</option>
+      </select>
+      <div class="field--range">
+        <input id="lbMin" class="field" type="number" placeholder="min £" min="0" step="1000" aria-label="Min value" />
+        <span class="muted">—</span>
+        <input id="lbMax" class="field" type="number" placeholder="max £" min="0" step="1000" aria-label="Max value" />
+      </div>
+      <select id="lbSort" class="field" aria-label="Sort">
+        <option value="deadline">Sort: deadline ↑</option>
+        <option value="value_desc">Sort: value ↓</option>
+        <option value="value_asc">Sort: value ↑</option>
+        <option value="published_desc">Sort: newest first</option>
+      </select>
+      <button id="lbResetBtn" class="btn btn--secondary btn--sm" type="button">Reset</button>
+    </div>
+    <div class="lb-filterbar__row lb-filterbar__row--chips">
+      <div class="lb-chipgroup">
+        <div class="lb-chipgroup__label">Category</div>
+        <div id="lbCategory" class="chiplist"></div>
+      </div>
+      <div class="lb-chipgroup">
+        <div class="lb-chipgroup__label">Source</div>
+        <div id="lbSource" class="chiplist"></div>
+      </div>
+    </div>
+  </section>
+
+  {# ============================== Table ================================== #}
+  <section class="panel">
+    <div class="panel__head">
+      <div class="panel__title">Open tenders</div>
+      <div class="panel__meta" id="lbTblFoot"></div>
+    </div>
+    <div class="tbl-wrap">
+      <table class="tenders">
+        <thead>
+          <tr>
+            <th scope="col">Title</th>
+            <th scope="col">Buyer</th>
+            <th scope="col">Category</th>
+            <th scope="col" class="num">Value</th>
+            <th scope="col">Deadline</th>
+            <th scope="col">Source</th>
+          </tr>
+        </thead>
+        <tbody id="lbBody"><tr><td colspan="6" class="center muted">Loading…</td></tr></tbody>
+      </table>
+    </div>
+  </section>
+
+</div>
+
+{% endblock %}
+
+{% block page_js %}
+<script type="module" src="{{ url_for('static', filename='js/live-bids.js') }}"></script>
+{% endblock %}
