@@ -15,6 +15,16 @@
 
 <div class="lb-page">
 
+  {# Small eyebrow label above the pillbox — page identity + last-updated
+     meta in a compact single row. Replaces the mid-page H1 that used to
+     sit between pillbox and KPIs (wasted vertical space, competed with
+     the pillbox for the eye). The sidebar rail already highlights the
+     active route, so this is a secondary identity affordance. #}
+  <div class="lb-pageintro">
+    <h1 class="lb-pageintro__title">Live bids</h1>
+    <span class="lb-pageintro__meta" id="lbLastUpdated"></span>
+  </div>
+
   {# ============================== Pillbox search bar (Airbnb-style) ======
      Sits at the VERY TOP of the page — the primary affordance. Three
      segments (Category · Size · Deadline) each open a <details> popover
@@ -104,16 +114,6 @@
     </select>
     <button id="lbResetBtn" type="button" hidden aria-hidden="true"></button>
   </section>
-
-  {# Compact page-header sits under the pillbox — identity + last-updated meta.
-     The pillbox is the primary affordance; the H1 provides accessible page
-     identity but doesn't compete for attention. #}
-  <header class="page-header page-header--compact">
-    <h1 class="page-header__title">Live bids</h1>
-    <div class="page-header__actions">
-      <span class="page-header__meta" id="lbLastUpdated"></span>
-    </div>
-  </header>
 
   {# ============================== KPI strip (4 tiles) ==================== #}
   <div class="kpis lb-kpis" role="region" aria-label="Live bids summary">

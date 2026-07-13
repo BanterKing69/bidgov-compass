@@ -1090,19 +1090,18 @@ body.app-shell {
 }
 .lb-pillbox:hover { box-shadow: var(--shadow-3); }
 
-/* Wide variant — top-of-page hero pillbox on Live Bids. Fills the
-   full flex column cross-axis so the search dominates the fold.
-   `align-self: stretch` is explicit here because in a column-flex parent
-   an `auto` cross-axis margin (used by the base `.lb-pillbox` for
-   centering) would otherwise disable stretch and shrink the pillbox to
-   its content width. Explicit stretch + `margin-inline: 0` restores the
-   expected full-width behaviour on wide screens. */
+/* Wide variant — top-of-page hero pillbox on Live Bids. Sized down to
+   ~880px (2/3 of full container width) so it feels focused, not stretched,
+   and centred. `max-width: 880px` explicitly overrides the base
+   `.lb-pillbox` max-width and re-uses the same auto-centering margin
+   pattern (auto side margins disable flex stretch, which is what we want
+   here — content-anchored width rather than column-flex stretch). */
 .lb-pillbox--wide {
-  align-self: stretch;
-  width: auto;
-  max-width: none;
+  align-self: center;
+  width: 100%;
+  max-width: 880px;
   padding: 8px;
-  margin: var(--space-md) 0 var(--space-lg);
+  margin: var(--space-md) auto var(--space-lg);
 }
 .lb-pillbox--wide .lb-pill__summary { padding: 14px 28px; }
 .lb-pillbox--wide .lb-pill__search { width: 56px; height: 56px; margin-left: 8px; }
@@ -1110,18 +1109,35 @@ body.app-shell {
 .lb-pillbox--wide .lb-pill__label { font-size: 12px; }
 .lb-pillbox--wide .lb-pill__value { font-size: 14px; }
 
-/* Compact page-header for Live bids — the pillbox above owns the visual
-   weight, so the H1 shrinks to a quiet identity row. */
-.page-header--compact {
-  padding-top: 0;
-  padding-bottom: var(--space-sm);
-  margin-bottom: var(--space-sm);
-  border-bottom: none;
+/* Eyebrow label above the pillbox — takes over from the deleted mid-page
+   header. Small, uppercase, muted; provides page identity without
+   competing with the pillbox for attention. The lastUpdated meta sits
+   inline on the right so it's visible without a dedicated row. */
+.lb-pageintro {
+  align-self: center;
+  width: 100%;
+  max-width: 880px;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-md);
+  margin: 0 auto;
+  padding: 0 6px;
 }
-.page-header--compact .page-header__title {
-  font-size: 20px;
-  font-weight: 600;
+.lb-pageintro__title {
+  margin: 0;
+  font-family: var(--f-head);
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
 }
+.lb-pageintro__meta {
+  font-size: 12px;
+  color: var(--muted);
+}
+.lb-pageintro__meta:empty { display: none; }
 
 .lb-pill {
   position: relative;
